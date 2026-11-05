@@ -28,6 +28,8 @@ const frameSink = {
 };
 
 export default defineConfig({
+    // relative asset paths, so the build works from any folder (GitHub Pages serves it from /splat-walk/)
+    base: './',
     plugins: [frameSink],
     resolve: {
         alias: {

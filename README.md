@@ -6,6 +6,9 @@ a camera body with motion blur, rolling shutter and lens, a 30 fps clock, and a 
 footsteps and the city. Tap the picture and it burns down to its Gaussians, then reassembles.
 Built with [PlayCanvas](https://playcanvas.com) (WebGPU, with a WebGL 2 fallback).
 
+**Watch it: https://willeastcott.github.io/splat-walk/** (sound on; it loads ~78 MB). Every push to
+`main` redeploys it (`.github/workflows/pages.yml`).
+
 ```bash
 npm install
 npm run dev        # http://localhost:5186
