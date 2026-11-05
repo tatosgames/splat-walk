@@ -1,0 +1,7 @@
+node_modules/
+dist/
+captures/
+tools/proc/
+# rejected generations (brogue footsteps, a take with a 200 Hz buzz)
+tools/raw/steps-take.mp3
+tools/raw/bed-rumble.mp3
