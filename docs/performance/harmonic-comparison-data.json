@@ -1,0 +1,44 @@
+{
+  "sources": [
+    ".performance\\scene-work\\mobile-v1.sog",
+    ".performance\\scene-work\\mobile-directional-v1.sog"
+  ],
+  "commonEntries": [
+    {
+      "file": "means_l.webp",
+      "byteIdentical": true,
+      "decodedPixelsIdentical": true
+    },
+    {
+      "file": "means_u.webp",
+      "byteIdentical": true,
+      "decodedPixelsIdentical": true
+    },
+    {
+      "file": "meta.json",
+      "byteIdentical": false,
+      "differentTopLevelFields": [
+        "shN"
+      ]
+    },
+    {
+      "file": "quats.webp",
+      "byteIdentical": true,
+      "decodedPixelsIdentical": true
+    },
+    {
+      "file": "scales.webp",
+      "byteIdentical": true,
+      "decodedPixelsIdentical": true
+    },
+    {
+      "file": "sh0.webp",
+      "byteIdentical": true,
+      "decodedPixelsIdentical": true
+    }
+  ],
+  "additionalSH1Entries": [
+    "shN_centroids.webp",
+    "shN_labels.webp"
+  ]
+}

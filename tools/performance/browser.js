@@ -22,7 +22,7 @@ globalThis.__splatProbe = {
             const gp = api.device.gpuProfiler;
             active.push({ at: performance.now(), time: api.time, fps: api.fps,
                 cpuUpdate: api.app.stats.cpuUpdateTime, cpuRender: api.app.stats.cpuRenderTime,
-                gpu: gp?.frameTime ?? null, passes: Object.fromEntries(gp?.passTimings ?? []),
+                gpu: gp?.enabled ? gp.frameTime : null, passes: Object.fromEntries(gp?.enabled ? gp.passTimings : []),
                 gpuBytes: api.app.stats.vramTotalBytes ?? null, scale: api.scale,
                 target: [api.sceneTarget.width, api.sceneTarget.height] });
         });
@@ -41,7 +41,7 @@ panel.innerHTML = `<details open><summary>Benchmark Splat Walk</summary>
 <label>Modello dispositivo <input id="perf-model" placeholder="Es. iPhone 13, Safari"></label>
 <label>Condizioni <input id="perf-notes" placeholder="Batteria, alimentazione, rete"></label>
 <label>Scenario <select id="perf-scenario"><option value="walk">Passeggiata, 3 ripetizioni</option><option value="burn">Burn e ripristino, 20 s</option><option value="thermal">Sessione di 5 minuti</option></select></label>
-<label>Frame rate <select id="perf-fps"><option>30</option><option>60</option></select></label>
+<label>Frame rate <select id="perf-fps"><option>30</option><option>50</option><option>60</option></select></label>
 <label>Backend <select id="perf-backend"><option value="auto">WebGPU se disponibile</option><option value="webgl">WebGL 2</option></select></label>
 <div class="perf-actions"><button id="perf-config">Applica e ricarica</button><button id="perf-run" disabled>Avvia test</button><button id="perf-stop" disabled>Ferma</button><button id="perf-export">Esporta JSON</button></div>
 <p id="perf-status" role="status">Caricamento scena…</p>
@@ -50,7 +50,7 @@ panel.innerHTML = `<details open><summary>Benchmark Splat Walk</summary>
 document.body.append(panel);
 const el = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-el('perf-fps').value = params.get('fps') ?? '60';
+el('perf-fps').value = params.get('fps') ?? '50';
 el('perf-backend').value = params.has('webgl') ? 'webgl' : 'auto';
 const status = message => { el('perf-status').textContent = message; };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -80,7 +80,7 @@ function metadata() {
             (ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unavailable'),
         engine: api.engine, fps: api.fps, requestedFps: api.config?.fps ?? api.fps,
         profile: api.config?.profile ?? 'original', sceneUrl: api.sceneUrl, taps: api.knobs.taps, filmPassName: api.film.name,
-        splatRenderer: api.gs.currentRenderer, alphaClipForward: api.gs.alphaClipForward, lens: [...api.film.lens],
+        splatRenderer: api.gs.currentRenderer, alphaClipForward: api.gs.alphaClipForward, lens: [...api.film.lens], gpuTimersEnabled:api.device.gpuProfiler?.enabled ?? false,
         walkDuration: api.walk.duration,
         params: Object.fromEntries(params), audioPcmBytes: pcmBytes,
         gpuMemoryNote: 'Engine-accounted allocations only, not process VRAM or physical GPU memory.',

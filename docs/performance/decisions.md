@@ -15,7 +15,7 @@ selezionate, mentre candidati e PLY di lavoro restano fuori dal bundle.
 
 Sono stati generati anche 500K SH0 (6.155.509 byte), 500K SH1 (7.571.208 byte) e 2M SH1
 (28.258.740 byte). La coppia 500K permette di isolare la perdita dovuta alle armoniche
-sulla stessa geometria. La generazione di un candidato non ne certifica la qualita.
+sulla stessa geometria. Il confronto degli archivi conferma byte identici per posizioni, rotazioni, scale e SH0; nel manifest cambia solo shN e si aggiungono le due texture SH1. I dati sono in [harmonic-comparison-data.json](harmonic-comparison-data.json). La generazione di un candidato non ne certifica la qualita.
 Non sono stati rimossi volumi lontani in base alle sole statistiche: potrebbero entrare
 nelle viste laterali della camera.
 
@@ -64,10 +64,10 @@ lossy si usa quindi un confronto affiancato; non viene inventata una soglia di q
 
 ## Criteri di rilascio
 
-Il target e 60 fps con GPU/CPU p95 entro 14 ms, tick persi sotto l'1% e intervallo p99
-entro 33,4 ms. Un run valido significa che la misura e completa e visibile, non che
+Il 6 novembre il target e stato aggiornato a 50 fps su richiesta dell'utente. I 60 fps restano un obiettivo successivo. Il budget corrente e GPU/CPU p95 entro 17 ms, tick persi sotto l'1% e intervallo p99
+entro 40 ms. Un run valido significa che la misura e completa e visibile, non che
 questi budget siano superati. Auto dichiara 30 fps dopo sovraccarico persistente;
-il fallback mantiene l'esperienza utilizzabile ma non soddisfa il target 60.
+il fallback mantiene l'esperienza utilizzabile ma non soddisfa il target 50.
 La matrice con fps esplicito mantiene il target richiesto per rendere visibili i fallimenti.
 
 I risultati PC non certificano una GPU mobile. Non sono stati forniti telefoni di

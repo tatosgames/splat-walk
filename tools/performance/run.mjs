@@ -9,10 +9,12 @@ const root = path.resolve(import.meta.dirname, '../..');
 process.chdir(root);
 const option = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=') ?? fallback;
 const suite = option('suite', 'all');
+const targetFps = Number(option('target-fps', '50'));
+if (!Number.isInteger(targetFps) || targetFps < 15 || targetFps > 120) throw new Error('target-fps must be an integer from 15 to 120');
 let extraQuery = option('query', '');
 const sceneFile = option('scene-file', '');
 const repeats = Number(option('repeats', '3'));
-if (!['all', 'matrix', 'diagnostic', 'loading', 'burn', 'thermal', 'captures', 'smoke', 'interaction', 'qa', 'profiles'].includes(suite)) throw new Error(`Unknown suite: ${suite}`);
+if (!['all', 'matrix', 'release', 'diagnostic', 'loading', 'burn', 'thermal', 'captures', 'smoke', 'interaction', 'qa', 'profiles'].includes(suite)) throw new Error(`Unknown suite: ${suite}`);
 if (!Number.isInteger(repeats) || repeats < 1 || repeats > 10) throw new Error('repeats must be an integer from 1 to 10');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const output = path.resolve(option('output', `.performance/${stamp}`));
@@ -36,7 +38,7 @@ async function files(dir) {
 const scene = [];
 for (const p of await files('public/scene')) { const b = await readFile(p); scene.push({ path: p.replaceAll('\\', '/'), bytes: b.length, sha256: hash(b) }); }
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
-const manifest = { createdAt: new Date().toISOString(), suite, repeats, extraQuery, diagnosticAsset, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--short'),
+const manifest = { createdAt: new Date().toISOString(), suite, repeats, targetFps, extraQuery, diagnosticAsset, commit: git('rev-parse', 'HEAD'), dirty: git('status', '--short'),
     node: process.version, os: `${os.type()} ${os.release()} ${os.arch()}`, cpu: os.cpus()[0]?.model,
     package: JSON.parse(await readFile('package.json', 'utf8')), lockSha256: hash(await readFile('package-lock.json')), scene,
     source: await Promise.all([...(await files('src')), ...(await files('tools/performance')), 'index.html', 'benchmark.html', 'vite.config.js']
@@ -84,23 +86,42 @@ try {
         let session;
         try {
             session = await open(viewport, query);
-            const result = await session.page.evaluate(o => window.__splatBenchmark.run(o), options);
+            if (options.gpuTimers === false) await session.page.evaluate(() => { if (window.__aw.device.gpuProfiler) window.__aw.device.gpuProfiler.enabled = false; });
+            if (options.userGesture) {
+                await session.page.locator('#performance-panel details').evaluate(el => {el.open=false;});
+                await session.page.locator('#play').click();
+                await session.page.evaluate(() => window.__aw.pause());
+            }
+            const pending = session.page.evaluate(o => window.__splatBenchmark.run(o), options);
+            let audioDuringRun = null;
+            if (options.userGesture) {
+                await session.page.waitForTimeout(4000);
+                audioDuringRun = await session.page.evaluate(() => ({healthy:window.__aw.soundtrack.healthy,
+                    audioTime:window.__aw.soundtrack.time,walkTime:window.__aw.t}));
+            }
+            const result = await pending;
+            if (options.userGesture && !audioDuringRun?.healthy) throw new Error('Audio clock did not start after the playback gesture');
             const info = { name, valid: result.valid, backend: result.metadata.backend, summary: result.segments };
-            await writeFile(path.join(output, `${name}.json`), JSON.stringify({ ...result, network: session.network }, null, 2));
+            await writeFile(path.join(output, `${name}.json`), JSON.stringify({ ...result, audioDuringRun, network: session.network }, null, 2));
+            if (Number.isFinite(options.captureAt)) {
+                await session.page.evaluate(t => window.__splatBenchmark.capture(t), options.captureAt);
+                await session.page.locator('#canvas').screenshot({path:path.join(output, `${name}.png`)});
+            }
             manifest.cases.push(info); console.log(`DONE ${name}: ${result.segments[0]?.renderedFps?.toFixed(1)} rendered fps`);
         } catch (e) { manifest.cases.push({ name, error: String(e) }); console.error(`FAIL ${name}: ${e}`); }
         finally { await session?.context.close(); await save(); }
     }
     const landscape = { width: 1280, height: 720 }, portrait = { width: 390, height: 844 };
-    if (suite === 'smoke') await record('smoke', landscape, 'fps=60&mute', { seconds: 6 });
+    if (suite === 'smoke') await record('smoke', landscape, `fps=${targetFps}&mute`, { seconds: 6 });
     if (suite === 'profiles') {
         await record('auto', landscape, 'mute', { seconds:12, burn:true });
+        for (const backend of ['webgpu','webgl']) await record(`audio-${backend}`,landscape,`fps=${targetFps}&${backend === 'webgl' ? 'webgl' : ''}`,{userGesture:true});
         for (const profile of ['balanced','quality']) for (const backend of ['webgpu','webgl']) {
-            await record(`${profile}-${backend}`, landscape, `profile=${profile}&fps=60&mute&${backend === 'webgl' ? 'webgl' : ''}`, {seconds:6});
+            await record(`${profile}-${backend}`, landscape, `profile=${profile}&fps=${targetFps}&mute&${backend === 'webgl' ? 'webgl' : ''}`, {seconds:6,captureAt:16});
         }
     }
-    if (['all', 'matrix'].includes(suite)) {
-        for (const backend of ['webgpu', 'webgl']) for (const fps of [30, 60]) for (const orientation of ['landscape', 'portrait']) {
+    if (['all', 'matrix', 'release'].includes(suite)) {
+        for (const backend of ['webgpu', 'webgl']) for (const fps of (suite === 'release' ? [targetFps] : [30, 60])) for (const orientation of ['landscape', 'portrait']) {
             for (let r = 1; r <= repeats; r++) await record(`${backend}-${fps}-${orientation}-${r}`,
                 orientation === 'landscape' ? landscape : portrait, `fps=${fps}&${backend === 'webgl' ? 'webgl&' : ''}mute`);
         }
@@ -111,11 +132,11 @@ try {
                 landscape, `fps=60&scale=${scale}&taps=${taps}&mute&${backend === 'webgl' ? 'webgl' : ''}`, { seconds: 20, startTime: 16 });
         }
     }
-    if (['all', 'burn'].includes(suite)) for (const backend of ['webgpu', 'webgl']) {
-        await record(`burn-${backend}`, landscape, `fps=60&mute&${backend === 'webgl' ? 'webgl' : ''}`, { seconds: 20, startTime: 16, burn: true });
+    if (['all', 'burn', 'release'].includes(suite)) for (const backend of ['webgpu', 'webgl']) {
+        await record(`burn-${backend}`, landscape, `fps=${targetFps}&mute&${backend === 'webgl' ? 'webgl' : ''}`, { seconds: 20, startTime: 16, burn: true });
     }
-    if (['all', 'thermal'].includes(suite)) await record('thermal-60', landscape, 'fps=60&mute', { seconds: 300, exercise: true });
-    if (['all', 'loading'].includes(suite)) {
+    if (['all', 'thermal', 'release'].includes(suite)) await record(`thermal-${targetFps}`, landscape, `fps=${targetFps}&mute`, { seconds: 300, exercise: true });
+    if (['all', 'loading', 'release'].includes(suite)) {
         for (const throttled of [false, true]) {
             const context = await browser.newContext({ viewport: landscape });
             const page = await context.newPage(), cdp = await context.newCDPSession(page);
@@ -143,8 +164,8 @@ try {
             await context.close();
         }
     }
-    if (['all', 'captures'].includes(suite)) {
-        const s = await open(landscape, 'fps=60&scale=1&mute');
+    if (['all', 'captures', 'release'].includes(suite)) {
+        const s = await open(landscape, `fps=${targetFps}&scale=1&mute`);
         try {
             const exitTime = await s.page.evaluate(() => Math.max(0, window.__aw.walk.duration - 3));
             for (const [name, t, effect] of [['start', 0, -1], ['narrow', 8, -1], ['middle', 16, -1], ['turn', 28, -1], ['exit', exitTime, -1], ['burn', 16, 2], ['restore', 16, 6]]) {

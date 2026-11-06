@@ -12,7 +12,7 @@ Aprire [la pagina di benchmark](https://tatosgames.github.io/splat-walk/benchmar
 ## Procedura
 
 1. Impostare lo schermo a 60 Hz se il dispositivo lo permette, disattivare il risparmio energetico e annotare le condizioni. Non eseguire il test durante altri carichi pesanti.
-2. Selezionare 60 fps e backend automatico nella pagina benchmark. Applicare e ricaricare; scegliere Passeggiata per tre ripetizioni. Mantenere la pagina visibile.
+2. Selezionare 50 fps e backend automatico nella pagina benchmark. Applicare e ricaricare; scegliere Passeggiata per tre ripetizioni. Mantenere la pagina visibile.
 3. Esportare il JSON, ruotare il telefono e ripetere. Registrare il backend realmente usato: WebGPU può non essere disponibile.
 4. Eseguire lo scenario Burn e ripristino, poi la sessione di cinque minuti. Annotare surriscaldamento, crash e peggioramento visibile.
 5. Nella demo principale verificare drag e tap separatamente, due dita, annullamento del gesto, ricentra, pausa durante il drag e rotazione del telefono. Controllare notch, barre del browser, pulsanti e crediti.
@@ -20,6 +20,6 @@ Aprire [la pagina di benchmark](https://tatosgames.github.io/splat-walk/benchmar
 
 ## Criteri
 
-Il target 60 richiede misure coerenti per l'intera passeggiata e l'interazione, non una media favorevole di pochi secondi. Confrontare p95/p99, tick persi, dimensioni effettive e backend. GPU timing mancante resta non disponibile; una viewport mobile emulata sul PC non sostituisce questa tabella.
+Il target corrente di 50 fps richiede misure coerenti per l'intera passeggiata e l'interazione, non una media favorevole di pochi secondi. Confrontare p95/p99, tick persi, dimensioni effettive e backend. GPU timing mancante resta non disponibile; una viewport mobile emulata sul PC non sostituisce questa tabella.
 
-Se il profilo Auto mostra 30 fps per limite del dispositivo, la demo resta utilizzabile ma il requisito 60 fps su quel telefono non è superato. Eventuali artefatti introdotti dalla riduzione delle Gaussiane vanno descritti per posa e angolo di visuale, oltre alla velocità.
+Se il profilo Auto mostra 30 fps per limite del dispositivo, la demo resta utilizzabile ma il requisito 50 fps su quel telefono non è superato. Eventuali artefatti introdotti dalla riduzione delle Gaussiane vanno descritti per posa e angolo di visuale, oltre alla velocità.

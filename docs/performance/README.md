@@ -11,7 +11,7 @@ npm run perf:baseline -- --suite=all --output=.performance/baseline-original
 node tools/performance/report.mjs .performance/baseline-original docs/performance/baseline.md
 ```
 
-Suite disponibili: `matrix`, `diagnostic`, `loading`, `burn`, `thermal`, `captures`, `smoke`, `interaction`, `qa` e `all`. `interaction` prova mouse e touch CDP; `qa` verifica sei viewport, limiti camera, audio, replay e retry della scena. La prova termica include cambi di orientamento della camera e burn ogni dieci secondi. `--repeats=3` è il default per matrice e diagnostica. Una suite completa richiede decine di minuti. Tenere Chrome visibile e il computer alimentato; non cambiare GPU o refresh durante il confronto.
+Suite disponibili: `matrix`, `release`, `diagnostic`, `loading`, `burn`, `thermal`, `captures`, `smoke`, `interaction`, `qa` e `all`. `interaction` prova mouse e touch CDP; `qa` verifica sei viewport, limiti camera, audio, replay e retry della scena. La prova termica include cambi di orientamento della camera e burn ogni dieci secondi. `--repeats=3` è il default per matrice e diagnostica. Una suite completa richiede decine di minuti. Tenere Chrome visibile e il computer alimentato; non cambiare GPU o refresh durante il confronto.
 
 I campioni sono conservati nei JSON, con hash degli asset e delle sorgenti nel manifest. `postrender` identifica i rendering; `frameend` serve solo a leggere le statistiche dopo il frame. Le query GPU possono arrivare in ritardo: i tempi GPU non sono attribuiti artificialmente al campione CPU contemporaneo. Valori assenti restano null. Per confermare un collo di bottiglia, confrontare gli stessi tratti a risoluzione e campionamento fissi.
 
@@ -23,7 +23,7 @@ La pagina non invia telemetria: i risultati sono in memoria e vengono scaricati 
 
 ## Acquisizioni
 
-La suite `captures` ferma camera, rumore ed effetti, attende la stabilizzazione del renderer e acquisisce due PNG per posa. Nasconde gli overlay solo durante queste acquisizioni. Il confronto PNG identico è un primo controllo di determinismo; se fallisce, quantificare le differenze pixel e non dichiarare conservata l'immagine. Le modifiche lossy della scena richiedono confronto affiancato invece dell'identità pixel.
+La suite `captures` usa scala scena fissa 1 (non la scala dinamica del runtime), ferma camera, rumore ed effetti, attende la stabilizzazione del renderer e acquisisce due PNG per posa. Nasconde gli overlay solo durante queste acquisizioni. Il confronto PNG identico è un primo controllo di determinismo; se fallisce, quantificare le differenze pixel e non dichiarare conservata l'immagine. Le modifiche lossy della scena richiedono confronto affiancato invece dell'identità pixel.
 
 Le misure di caricamento separano cache fredda/calda e rete libera/10 Mbit/s con RTT 100 ms. Decodifica della scena, upload GPU e compilazione shader possono sovrapporsi: sono aggregate quando manca una misura affidabile separata. HTTP 200 e build riuscita non equivalgono a correttezza visiva.
 
@@ -38,3 +38,7 @@ La prova termica ripete il percorso per cinque minuti, alterna offset yaw/pitch 
 Per confrontare un candidato senza pubblicarlo, usare `--scene-file=.performance/scene-work/mobile-v1.sog` insieme a `--suite=captures` e `--query=profile=quality&shutter=0.0125&readout=0.016&taps=10`. Il runner copia il SOG solo nella build isolata del run e ne registra hash e dimensione. Ripetere con la stessa geometria e SH diversi per isolare il colore dalla decimazione.
 
 Dopo il deploy, `node tools/performance/check-pages.mjs --output=.performance/pages-check` verifica la demo pubblicata in Chrome: rendering portrait, drag, audio, risorse HTTP, benchmark breve e cache fredda/calda a 10 Mbit/s. I JSON e le schermate restano locali. Questa verifica del sito pubblicato usa ancora la GPU del PC.
+
+Cold indica cache HTTP svuotata via CDP; non azzera le cache shader del driver. Nella verifica Pages il browser ha gia aperto la demo prima della prova di rete. I tempi di cache fredda non sono quindi una misura garantita della prima compilazione su un dispositivo mai usato.
+
+Il target corrente e 50 fps. `npm run perf:baseline -- --suite=release --target-fps=50` esegue tre giri per backend e orientamento, burn, cinque minuti, rete e catture. Evita di ripetere l'intera diagnostica quando il budget corrente e gia sufficiente. I dati storici a 30/60 rimangono separati.

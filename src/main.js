@@ -225,8 +225,8 @@ const scaler = {
             renderScale = s;
             if (DEBUG) console.log(`render scale ${s.toFixed(3)} (gpu ${this.ema.toFixed(1)} ms, drops ${this.drops})`);
         }
-        // Keep the requested 60 fps visible as a failed target on constrained devices.
-        if (config.auto && !params.has('fps') && FPS === 60 && s <= 0.5 && this.drops > 2) this.overloaded++;
+        // Fall back only when the current target cannot be held at minimum resolution.
+        if (config.auto && !params.has('fps') && FPS === config.fps && FPS > 30 && s <= 0.5 && this.drops > 2) this.overloaded++;
         else this.overloaded = 0;
         if (this.overloaded >= 4) {
             FPS = 30; lastIndex = -1;

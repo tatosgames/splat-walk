@@ -48,8 +48,8 @@ The output has both pixel and DPR caps, and the scene target has dynamic resolut
 Performance shares one RGB ray per temporal sample, omitting lateral chromatic aberration;
 Balanced and Original retain separate colour rays. All profiles retain the film treatment.
 
-The rendering target is 60 fps. Auto visibly falls back to 30 fps after sustained overload
-at minimum scene resolution. A target or average is not a guarantee of stable 60 fps.
+The current rendering target is 50 fps, accepted for this version. Auto visibly falls back to 30 fps after sustained overload
+at minimum scene resolution. A target or average is not a guarantee of a stable frame rate.
 The compact scan loses fine sign lettering and close wall detail. Use Balanced or Original
 for comparison. Real Android and iPhone validation remains pending; PC viewport emulation
 cannot certify mobile GPU performance. See [measurements](docs/performance/README.md).
@@ -97,7 +97,7 @@ single-file loading strategy and have not been invented by changing a runtime bu
 | Parameter | Effect |
 | --- | --- |
 | `profile=performance`, `balanced`, `quality`, `auto` | Select scene and rendering preset; default Auto |
-| `fps=60` | Explicit target, clamped to 15–120; disables Auto's 30 fps fallback |
+| `fps=50` | Target (default 50), clamped to 15–120; disables Auto's 30 fps fallback |
 | `taps=4` | Film temporal samples, clamped to 1–24 |
 | `shutter=0.008333` | Exposure seconds; default 1/120, clamped positive |
 | `readout=0.008` | Rolling shutter seconds, 0–0.05 |

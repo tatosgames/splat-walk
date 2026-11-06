@@ -15,8 +15,10 @@ try {
     page.on('response', r => {
         if (r.url().startsWith(base.href)) result.requests.push({ url:r.url(), status:r.status() });
     });
+    const initialStarted = performance.now();
     await page.goto(new URL('?mute', base).href, {waitUntil:'domcontentloaded'});
     await page.waitForFunction(() => window.__aw?.state === 'ready', null, {timeout:60000});
+    result.initialDemoReadyMs = performance.now() - initialStarted;
     await page.locator('#play').click(); await page.waitForTimeout(1000);
     await page.locator('#pausebtn').click();
     await page.mouse.move(195,400); await page.mouse.down();
@@ -36,15 +38,22 @@ try {
     await page.waitForFunction(() => window.__aw.soundtrack.ready && window.__aw.soundtrack.healthy, null, {timeout:60000});
     await page.locator('#pausebtn').click();
     result.audioReady = await page.evaluate(() => window.__aw.soundtrack.ready);
+    result.withAudio = await page.evaluate(() => {
+        const resources = performance.getEntriesByType('resource').map(r => ({url:r.name,transferBytes:r.transferSize,encodedBytes:r.encodedBodySize}));
+        const nav = performance.getEntriesByType('navigation')[0];
+        return {resources,transferBytes:resources.reduce((n,r)=>n+r.transferBytes,nav?.transferSize ?? 0),
+            note:'After all scene and audio assets loaded; playback itself was not held for a full route.'};
+    });
     const cdp = await context.newCDPSession(page);
     await cdp.send('Network.enable'); await cdp.send('Network.clearBrowserCache');
+    result.coldNote = 'Cold HTTP cache at 10 Mbit/s and 100 ms; GPU process and shader caches may already be warm from the initial demo check.';
     cdp.on('Network.responseReceived', e => {
         if (e.response.url.startsWith(base.href)) result.cache.push({url:e.response.url,status:e.response.status,
             diskCache:!!e.response.fromDiskCache, headers:e.response.headers});
     });
     await cdp.send('Network.emulateNetworkConditions', {offline:false,latency:100,downloadThroughput:1250000,uploadThroughput:1250000});
     for (const cache of ['cold','warm']) {
-        const url = new URL('benchmark.html?fps=60&mute',base);
+        const url = new URL('benchmark.html?fps=50&mute',base);
         await page.goto(url.href,{waitUntil:'domcontentloaded'});
         await page.waitForFunction(() => !!window.__splatBenchmark);
         await page.evaluate(() => window.__splatBenchmark.ready());
