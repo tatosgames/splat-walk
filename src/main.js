@@ -5,6 +5,7 @@ import { ROUTE } from './route.js';
 import { Soundtrack } from './audio.js';
 import { BurnFx } from './burn.js';
 import { settings, numeric, outputRatio, viewTanHalf, nextRenderDeadline } from './settings.js';
+import { AdaptiveScale } from './adaptive-scale.js';
 import { CameraLook } from './camera-look.js';
 
 const params = new URLSearchParams(location.search);
@@ -18,6 +19,8 @@ if (DEBUG) document.body.classList.add('debug');
 // ---- the camera: a phone-like lens, with an explicit pixel and frame budget ----
 const DISPLAY_VFOV = config.fov;
 const OVERSCAN = 1.1;                                  // spare image around the frame for shake, blur and lens
+const AUTO_FPS = 60;
+const MIN_RENDER_SCALE = 0.35;
 let FPS = config.fps;
 const SHUTTER = config.shutter;
 const READOUT = config.readout;
@@ -135,7 +138,7 @@ film.init(null);
 filmCam.camera.framePasses = [film];
 
 // the splats render at `renderScale` of the output (chosen by the benchmark to hold the frame rate)
-let renderScale = numeric(params, 'scale', config.profile === 'performance' ? 0.7 : 1, 0.35, 1);
+let renderScale = numeric(params, 'scale', config.profile === 'performance' ? 0.7 : 1, MIN_RENDER_SCALE, 1);
 function resizeTarget() {
     const w = Math.max(4, Math.round(device.width * OVERSCAN * renderScale));
     const h = Math.max(4, Math.round(device.height * OVERSCAN * renderScale));
@@ -200,38 +203,64 @@ function applyShot(t, exposure = true) {
 
 // ---- dynamic resolution: hold the frame rate by trimming the splat render size ----
 const scaler = {
-    ema: 0, last: 0, drops: 0, overloaded: 0,
-    reset() { this.ema = 0; this.last = performance.now(); this.drops = 0; this.overloaded = 0; },
-    // called after each video frame is produced; `skipped` = video frames missed since the last
-    frame(skipped) {
+    adaptive: new AdaptiveScale(), windowStart: 0, windowFrames: 0, lastFps: 0,
+    minSlowSince: null, fallbackProbeAt: Infinity, probeEndsAt: 0,
+    reset() {
+        this.adaptive.reset(); this.windowStart = 0; this.windowFrames = 0;
+        this.lastFps = 0; this.minSlowSince = null;
+        if (FPS !== 30) { this.fallbackProbeAt = Infinity; this.probeEndsAt = 0; }
+        else if (!Number.isFinite(this.fallbackProbeAt)) this.fallbackProbeAt = performance.now() + 15000;
+    },
+    // Measure actual emitted playback frames over a one-second window, not RAF callback cadence.
+    frame() {
         if (params.has('scale')) return;
-        const gp = device.gpuProfiler;
-        const budget = 0.86 * 1000 / FPS;
-        const ms = gp?.enabled ? gp.frameTime : 0;
-        if (ms > 0) this.ema = this.ema ? this.ema + (ms - this.ema) * 0.12 : ms;
-        if (skipped > 0) this.drops += skipped;
         const now = performance.now();
-        if (now - this.last < 900) return;
-        this.last = now;
-        let s = renderScale;
-        if (this.ema > budget || this.drops > 2) {
-            const f = this.ema > 0 ? Math.sqrt(budget * 0.92 / this.ema) : 0.93;
-            s = renderScale * Math.max(0.85, Math.min(0.97, f));
-        } else if (this.ema > 0 && this.ema < budget * 0.68 && this.drops === 0) {
-            s = renderScale * 1.04;
+        if (!this.windowFrames) { this.windowStart = now; this.windowFrames = 1; return; }
+        this.windowFrames++;
+        const elapsed = now - this.windowStart;
+        if (elapsed < 1000) return;
+        this.lastFps = (this.windowFrames - 1) * 1000 / elapsed;
+        this.windowStart = now;
+        this.windowFrames = 1;
+
+        if (config.auto && !params.has('fps') && FPS === 30 && now >= this.fallbackProbeAt) {
+            FPS = AUTO_FPS;
+            this.probeEndsAt = now + 4500;
+            this.fallbackProbeAt = Infinity;
+            this.adaptive.reset();
+            lastIndex = -1;
+            return;
         }
-        s = Math.max(0.5, Math.min(1, Math.round(s * 40) / 40));
-        if (s !== renderScale) {
-            renderScale = s;
-            if (DEBUG) console.log(`render scale ${s.toFixed(3)} (gpu ${this.ema.toFixed(1)} ms, drops ${this.drops})`);
+        if (this.probeEndsAt && now >= this.probeEndsAt) {
+            if (this.lastFps <= 55) {
+                FPS = 30;
+                this.fallbackProbeAt = now + 15000;
+            }
+            this.probeEndsAt = 0;
+            this.adaptive.reset();
+            lastIndex = -1;
+            return;
         }
-        // Fall back only when the current target cannot be held at minimum resolution.
-        if (config.auto && !params.has('fps') && FPS === config.fps && FPS > 30 && s <= 0.5 && this.drops > 2) this.overloaded++;
-        else this.overloaded = 0;
-        if (this.overloaded >= 4) {
-            FPS = 30; lastIndex = -1;
+
+        const next = this.adaptive.update(renderScale, this.lastFps, now);
+        if (next !== renderScale) {
+            renderScale = next;
+            if (DEBUG) console.log(`adaptive resolution ${renderScale.toFixed(3)} (${this.lastFps.toFixed(1)} fps)`);
         }
-        this.drops = 0;
+
+        // If Auto still cannot hold 25 fps at minimum resolution, lower the frame
+        // target as a last resort. Explicit fps and manual profiles keep their target.
+        if (config.auto && !params.has('fps') && FPS === AUTO_FPS && renderScale <= MIN_RENDER_SCALE && this.lastFps < 25) {
+            this.minSlowSince ??= now;
+            if (now - this.minSlowSince >= 5000) {
+                FPS = 30;
+                this.fallbackProbeAt = now + 15000;
+                lastIndex = -1;
+                this.minSlowSince = null;
+            }
+        } else {
+            this.minSlowSince = null;
+        }
     }
 };
 
@@ -332,12 +361,11 @@ app.on('update', (dt) => {
         else clock += Math.min(dt, 0.1) * rate;
         const index = Math.floor(clock * FPS + 1e-4);
         if (index !== lastIndex) {
-            const skipped = lastIndex >= 0 ? Math.max(0, index - lastIndex - 1) : 0;
             lastIndex = index;
             tPlay = (index / FPS) % playbackDuration;
             applyShot(tPlay);
             renderFrame();
-            scaler.frame(skipped);
+            scaler.frame();
         }
         if (clock >= playbackDuration) end();
     } else if (state === 'bench') {
@@ -630,8 +658,10 @@ window.__aw = {
     app, camera, walk, film, knobs, sceneTarget, device, gs: app.scene.gsplat,
     get t() { return tPlay; },
     get state() { return state; },
+    get fps() { return FPS; },
     get renderScale() { return renderScale; },
     set renderScale(v) { renderScale = v; app.renderNextFrame = true; },
+    get measuredFps() { return scaler.lastFps; },
     seek(t) {
         tPlay = t; clock = t; lastIndex = -1; applyShot(t); app.renderNextFrame = true;
         if (state === 'playing') startSound();

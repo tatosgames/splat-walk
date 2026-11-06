@@ -11,9 +11,10 @@ export function numeric(params, name, fallback, min, max) {
 export function settings(params) {
     const requested = params.get('profile') ?? 'auto';
     const profile = Object.hasOwn(profiles, requested) ? requested : 'performance';
-    return { profile, auto: requested === 'auto' || !Object.hasOwn(profiles, requested), ...profiles[profile],
+    const auto = requested === 'auto' || !Object.hasOwn(profiles, requested);
+    return { profile, auto, ...profiles[profile],
         scene: params.get('scene') || profiles[profile].scene,
-        fps: numeric(params, 'fps', 50, 15, 120), taps: Math.round(numeric(params, 'taps', profiles[profile].taps, 1, 24)),
+        fps: numeric(params, 'fps', auto ? 60 : 50, 15, 120), taps: Math.round(numeric(params, 'taps', profiles[profile].taps, 1, 24)),
         fov: numeric(params, 'fov', 50, 25, 90), shutter: numeric(params, 'shutter', 1 / 120, 0.0001, 0.1),
         readout: numeric(params, 'readout', 0.008, 0, 0.05), maxh: numeric(params, 'maxh', 2160, 240, 4320) };
 }

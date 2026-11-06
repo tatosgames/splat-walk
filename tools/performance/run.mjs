@@ -215,6 +215,8 @@ try {
             await page.locator('#mute').click();
             assert(await page.locator('#mute').getAttribute('aria-pressed')==='false','Muted state failed');
             assert(await page.locator('#mute svg').count()===1,'Audio icon was replaced with text');
+            const adaptiveStatus=await page.evaluate(()=>({fps:window.__aw.fps,measuredFps:window.__aw.measuredFps,scale:window.__aw.renderScale}));
+            assert(adaptiveStatus.fps===60&&adaptiveStatus.measuredFps>0,'Auto target or emitted-frame measurement is unavailable');
             const outAndBack=await page.evaluate(()=>{
                 const w=window.__aw.walk, p=window.__aw.app.root.findByName('camera').getPosition().clone();
                 const q=new (window.__aw.app.root.findByName('camera').getRotation().constructor)();
@@ -243,7 +245,7 @@ try {
                 await page.screenshot({path:path.join(output,`interface-${w}x${h}.png`)});
             }
             assert(!errors.length,errors.join(';'));
-            manifest.cases.push({name:'out-and-back-loop',valid:true,outAndBack,held,returning,loop,errors});
+            manifest.cases.push({name:'out-and-back-loop',valid:true,adaptiveStatus,outAndBack,held,returning,loop,errors});
         } finally {await context.close();await save();}
     }
     // Smoke assertions: idle update callbacks must not turn into rendered samples.

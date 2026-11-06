@@ -3,8 +3,13 @@ import assert from 'node:assert/strict';
 import { settings, outputRatio, viewTanHalf, nextRenderDeadline } from '../../src/settings.js';
 test('invalid URL values cannot divide by zero or select an inherited profile', () => {
     const s = settings(new URLSearchParams('profile=__proto__&fps=NaN&taps=0&shutter=0&readout=-1&maxh=Infinity'));
-    assert.equal(s.profile, 'performance'); assert.equal(s.fps, 50); assert.equal(s.taps, 1);
+    assert.equal(s.profile, 'performance'); assert.equal(s.fps, 60); assert.equal(s.taps, 1);
     assert(s.shutter > 0); assert.equal(s.readout, 0); assert.equal(s.maxh, 2160);
+});
+test('Auto allows recovery above 55 fps while fixed profiles retain their 50 fps default', () => {
+    assert.equal(settings(new URLSearchParams()).fps, 60);
+    assert.equal(settings(new URLSearchParams('profile=performance')).fps, 50);
+    assert.equal(settings(new URLSearchParams('profile=auto&fps=50')).fps, 50);
 });
 test('cover crop preserves vertical FOV in portrait and horizontal FOV on wide phones', () => {
     const base = Math.tan(50 * Math.PI / 360);

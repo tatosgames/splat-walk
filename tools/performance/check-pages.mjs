@@ -25,11 +25,11 @@ try {
     await page.mouse.move(195,400); await page.mouse.down();
     await page.mouse.move(270,440,{steps:10}); await page.mouse.up(); await page.waitForTimeout(600);
     result.runtime = await page.evaluate(() => ({
-        state:window.__aw.state, profile:window.__aw.config.profile, targetFps:window.__aw.config.fps,
+        state:window.__aw.state, profile:window.__aw.config.profile, targetFps:window.__aw.fps,
         canvas:[window.__aw.device.width,window.__aw.device.height], backend:window.__aw.device.deviceType,
         yaw:window.__aw.cameraLook.yaw, burn:window.__aw.burn.active
     }));
-    if (result.runtime.targetFps !== 50 || result.runtime.profile !== 'performance' || result.runtime.canvas[1] <= result.runtime.canvas[0] ||
+    if (result.runtime.targetFps !== 60 || result.runtime.profile !== 'performance' || result.runtime.canvas[1] <= result.runtime.canvas[0] ||
         Math.abs(result.runtime.yaw) < 5 || result.runtime.burn) throw new Error('Published app failed portrait/drag verification');
     await page.screenshot({path:path.join(output,'pages-portrait.png')});
     await page.setViewportSize({width:844,height:390}); await page.waitForTimeout(300);
