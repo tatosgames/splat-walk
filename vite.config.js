@@ -38,5 +38,8 @@ export default defineConfig({
     },
     server: { port: 5186, strictPort: true, watch: { ignored: ['**/captures/**'] } },
     preview: { port: 5187, strictPort: true },
-    build: { target: 'es2022', assetsInlineLimit: 0, chunkSizeWarningLimit: 2000 }
+    build: {
+        target: 'es2022', assetsInlineLimit: 0, chunkSizeWarningLimit: 2000,
+        rolldownOptions: { input: { main: path.join(here, 'index.html'), benchmark: path.join(here, 'benchmark.html') } }
+    }
 });

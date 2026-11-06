@@ -1,6 +1,7 @@
 node_modules/
 dist/
 captures/
+.performance/
 tools/proc/
 # rejected generations (brogue footsteps, a take with a 200 Hz buzz)
 tools/raw/steps-take.mp3

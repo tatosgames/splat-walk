@@ -1,125 +1,125 @@
-# splat-walk
+# Splat Walk
 
-A web app that plays a first-person walk through a Gaussian splat scan of Artillery Passage
-(Spitalfields, London), made to look like footage from a phone: a simulated walker and head,
-a camera body with motion blur, rolling shutter and lens, a 30 fps clock, and a soundtrack of
-footsteps and the city. Tap the picture and it burns down to its Gaussians, then reassembles.
-Built with [PlayCanvas](https://playcanvas.com) (WebGPU, with a WebGL 2 fallback).
+A first-person walk through David Fletcher's Gaussian splat scan of Artillery Passage,
+London, built with PlayCanvas and Vite. This fork adds portrait rendering, touch camera
+rotation, compact scene variants and reproducible performance measurements.
 
-**Watch it: https://willeastcott.github.io/splat-walk/** (sound on; it loads ~78 MB). Every push to
-`main` redeploys it (`.github/workflows/pages.yml`).
+[Open the demo](https://tatosgames.github.io/splat-walk/) ·
+[Run a device benchmark](https://tatosgames.github.io/splat-walk/benchmark.html) ·
+[Original project](https://github.com/willeastcott/splat-walk)
 
-```bash
-npm install
-npm run dev        # http://localhost:5186
-npm run build      # static site in dist/
+## Run locally
+
+```sh
+npm ci
+npm run dev       # http://localhost:5186
+npm run build     # static site in dist/
+npm run preview   # http://localhost:5187
+npm run perf:test
 ```
 
-Click play (or press Space). **Tap or click the picture to burn it down to its Gaussians.** Space
-(or the corner button that appears when the pointer moves) pauses, R restarts, F toggles
-fullscreen, M mutes.
+Node 24 was used for development. GitHub Pages builds and deploys `main` through
+`.github/workflows/pages.yml`. Asset URLs are relative so the `/splat-walk/` prefix works.
 
-## Burn to Gaussians (`src/burn.js`)
+## Controls
 
-A tap casts a ray from the camera into the passage (against the floor and wall model) and lights a
-fire front at that point. It spreads through the scan, slowing as it goes (about 24 m reach). As
-it passes, each Gaussian flashes hot; the larger ones turn into thin glowing outlines of their own
-elliptical footprint (the structure the scan is made of) while the small ones flare; then they all
-collapse into small dots that drift up like embers and cool, about half of them kept so the cloud
-stays crisp, as the world behind falls into darkness. Five seconds after the tap a cyan front
-sweeps out from the same point: the dots fly home, flash through their outlines again and
-re-inflate into the photoreal scene. Two taps can overlap. The walk carries on throughout, and
-taps also work while paused.
+Press Play to start. Drag the picture with one finger or the mouse to look around;
+a short tap reveals the Gaussians with a burn and restoration effect. Dragging, cancelled
+gestures and multitouch do not trigger a burn. Camera rotation works while paused.
+Recenter restores the route's original viewing direction.
 
-It runs in the engine's per-splat hooks on the shared unified material: `gsplatModifyVS` moves,
-reshapes and recolours each splat (in the GPU projector compute pass on WebGPU, so nothing has to
-re-render the 5M-splat work buffer), and `gsplatModifyPS` draws each fragment as gaussian, outline
-or dot. The per-splat state reaches the fragments as one 32-bit varying (four packed bytes). Both
-WGSL and GLSL versions are included. On the integrated GPU a burn costs a few ms, which the
-dynamic resolution absorbs at 30 fps.
+Space pauses/resumes, R restarts, M toggles sound and F requests fullscreen where supported.
+Touch controls remain visible. Portrait uses the actual viewport and preserves the vertical
+field of view; wide touch landscape preserves the horizontal composition. Desktop retains
+the original 16:9 presentation. Rotation changes orientation only, never the walk's position.
+Yaw is limited to ±60 degrees and pitch to ±30 degrees.
 
-## The scene
+## Quality and download size
 
-`scene.ply` from the download (1.18 GB, 5.0M splats, 3 SH bands) was compressed with
-[splat-transform](https://github.com/playcanvas/splat-transform) into SOG (76 MB), split into six
-spatial chunks so the engine re-evaluates view-dependent colour per chunk rather than for all
-5M splats whenever the camera moves:
+| Profile | Scene | SH bands | Scene bytes | Film samples | Maximum output long edge |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Auto / Performance | 250,000 Gaussians | 0 | 3,124,504 | 4 | 896 px |
+| Balanced | 1,000,000 Gaussians | 1 | 14,490,298 | 6 | 1,600 px |
+| Original | 4,999,591 Gaussians, five chunks | 3 | 79,577,556 | 10 | 1,920 px |
 
-```bash
-splat-transform -g 1 scene.ply -l 0 public/scene/lod-meta.json --lod-chunk-count 1024 --lod-chunk-extent 20
+These are scene sizes, not complete page transfer sizes. Only the selected scene downloads.
+Auto starts with Performance; it does not download larger profiles to test the hardware.
+The output has both pixel and DPR caps, and the scene target has dynamic resolution.
+Performance shares one RGB ray per temporal sample, omitting lateral chromatic aberration;
+Balanced and Original retain separate colour rays. All profiles retain the film treatment.
+
+The rendering target is 60 fps. Auto visibly falls back to 30 fps after sustained overload
+at minimum scene resolution. A target or average is not a guarantee of stable 60 fps.
+The compact scan loses fine sign lettering and close wall detail. Use Balanced or Original
+for comparison. Real Android and iPhone validation remains pending; PC viewport emulation
+cannot certify mobile GPU performance. See [measurements](docs/performance/README.md).
+
+Audio loads after a playback gesture and joins at the current walk time. Muted playback does
+not download audio. Optional sound failures do not block the visual experience. Backgrounding
+the page pauses playback. Scene failures expose a retry control.
+
+## Asset pipeline
+
+`@playcanvas/splat-transform` is pinned to 3.10.3 as a local development dependency.
+The existing compressed SOG was the available source; decoding it to PLY does not recover
+information lost during the original compression. The original five chunks remain unchanged.
+Generated variants use SOG v2 and have been loaded with PlayCanvas 2.23.3 on both backends.
+
+```sh
+npm run splat -- --help
+npm run splat:info
+npm run splat:build -- --name=example --count=500000 --harmonics=0 --gpu=cpu
 ```
 
-It is a single level of detail, so nothing ever pops between levels, and every splat is kept. A
-plain single-file SOG (`splat-transform scene.ply scene.sog`, 65 MB) also works with
-`?scene=./scene.sog` if it is copied into `public/`, but it costs ~20 ms more per frame.
+The build script writes intermediate PLY, SOG and recipe JSON into ignored
+`.performance/scene-work/`. It refuses to overwrite an existing candidate. Decimation
+retains the source harmonics; a separate encoding step reduces SH bands. `--source=...`
+accepts another source and `--gpu=1` can select an adapter listed by the installed CLI.
+The selected 250K variant was decimated through a 500K intermediate; its exact commands,
+hashes and provenance are in [scene-recipes.json](docs/performance/scene-recipes.json).
+Only promote reviewed candidates into `public/scene/`; do not recompress its data textures
+with a photographic image optimizer. More LOD levels were unnecessary for the selected
+single-file loading strategy and have not been invented by changing a runtime budget.
 
-## How it is made to look like footage
+## Rendering structure
 
-- **The walk** (`src/walk.js`, `src/route.js`) is a pure function of time. The route was measured
-  from the splat: floor height along the passage, the walls, and the obstacles at walking height
-  (bollards, lamp posts, bins, a parked bike), which the path weaves around. The gait model has
-  cadence tied to speed, the double-hump vertical bob with a slightly uneven left/right step, side
-  sway at stride frequency, a soft heel-strike shock, trunk counter-rotation, breathing and sway
-  while standing, gait initiation and a two-step stop. The head is simulated: attention steps
-  between goals - the path a few metres ahead with small irregular glances around it (and now and
-  then down at the footing), or things a walker notices (shopfronts, signs, the graffiti down the
-  side alley, the bollards underfoot), re-fixated once or twice while looking. The head chases each
-  goal like a damped spring tuned per movement, so turns start softly, peak early, settle late and
-  overshoot a little, with bigger turns taking longer, and the phone follows the head through a
-  second, stiffer spring. Turns roll the head into the turn and dip it slightly, and a head held
-  to one side stays a little tilted. The walker slows a little while looking. Hand shake is
-  layered on as smooth noise.
-- **The camera** (`src/post.js`) renders the splats with 10% overscan into an HDR target. A film pass
-  then integrates each output pixel over a 1/80 s exposure and a 16 ms rolling-shutter readout,
-  reprojecting from the exact camera pose at each instant (depth from an analytic proxy of floor
-  and walls, so the near walls and paving blur correctly). It adds barrel distortion, lateral
-  chromatic aberration, halation around the bright sky, phone-style sharpening, lens falloff and
-  sensor noise on a 1080p grid.
-- **The sound** (`src/audio.js`) is what the phone's microphone would pick up. A footstep lands
-  at every heel strike of the gait model, chosen from 16 single steps of trainers on stone paving,
-  alternating a slightly heavier and lighter foot, softer as the walker slows. Inside the passage
-  the steps get flutter echo between the walls and a short stone tail, which fades as the walker
-  comes out onto the street. Under that runs a continuous city bed: four long textures (distant
-  traffic, a far murmur of people, birds, a low wash of the wider city), each looped seamlessly and
-  drifting in level on its own slow cycle, so the mix never settles. Faint distant sounds rise out
-  of it and sink back - cars, a van, a scooter, voices, passers-by, pigeons, a gull, a horn, a dog,
-  a trolley, a siren - placed at random but the same on every play, overlapping, softened by
-  distance. Between the buildings the whole city is quieter and duller. It all goes through a
-  phone-mic chain (no low end, automatic gain, a limiter), landing around -22 LUFS.
-- The sounds were generated with ElevenLabs by `node tools/build-audio.mjs` (raw takes are cached
-  in `tools/raw/`, so re-runs are free) and are ~2 MB in `public/audio/`. The script trims each
-  texture to its steady stretch. One take was rejected for a steady 200 Hz harmonic buzz, and its
-  replacement had a 7 kHz whine notched out.
-- **The clock** runs at a fixed 30 fps, like a phone video, and frames are only rendered on that
-  cadence. While sound plays, the audio clock drives the pictures, as a video player syncs to its
-  soundtrack. Before playback the app benchmarks the GPU on a stretch of the walk. During playback
-  it trims the splat render resolution (never the output) to hold 30 fps, using GPU timer queries.
+- `src/main.js`: loading, PlayCanvas cameras, render scheduling, audio clock and resolution scaler.
+- `src/settings.js`: quality presets, validated URL settings and projection/pixel budgets.
+- `src/camera-look.js`: tap/drag classification, pointer cancellation and smoothed quaternion offsets.
+- `src/walk.js`, `src/route.js`: time-based route, gait and automatic gaze.
+- `src/post.js`: matching WGSL/GLSL film shaders, exposure, rolling shutter, lens and grain.
+- `src/burn.js`: matching Gaussian hooks for two overlapping burn/restoration fronts.
+- `src/audio.js`: footsteps, city beds and event sounds synchronized with the route.
+- `benchmark.html`, `tools/performance/`: separate diagnostics; not imported by the demo.
 
 ## URL parameters
 
 | Parameter | Effect |
 | --- | --- |
-| `fps=60` | Video frame rate (default 30) |
-| `shutter=0.0167` | Exposure time in seconds (default 1/80) |
-| `readout=0.016` | Rolling-shutter readout time in seconds |
-| `fov=50` | Vertical field of view in degrees |
-| `maxh=1080` | Maximum output height in device pixels |
-| `scale=1` | Fixed splat render scale (disables dynamic resolution) |
-| `scene=./scene.sog` | Load a different splat file |
-| `webgl` | Force WebGL 2 instead of WebGPU |
-| `autoplay` | Start playing as soon as it's loaded (silent unless the browser allows audio) |
-| `mute` | Start muted |
-| `debug` | HUD, free camera (C toggles; WASD/QE + drag), `window.__aw` dev handle |
+| `profile=performance`, `balanced`, `quality`, `auto` | Select scene and rendering preset; default Auto |
+| `fps=60` | Explicit target, clamped to 15–120; disables Auto's 30 fps fallback |
+| `taps=4` | Film temporal samples, clamped to 1–24 |
+| `shutter=0.008333` | Exposure seconds; default 1/120, clamped positive |
+| `readout=0.008` | Rolling shutter seconds, 0–0.05 |
+| `fov=50` | Base vertical field of view, 25–90 degrees |
+| `maxh=1080` | Additional output height cap; preset pixel/long-edge limits still apply |
+| `scale=0.5` | Fixed scene target scale, 0.35–1; disables dynamic resolution |
+| `scene=./scene/lod-meta.json` | Override the selected scene URL |
+| `film=full` | Restore separate colour rays in Performance for comparison |
+| `alpha=0.02` | Forward opacity cutoff; default 0.02 in Performance, 1/255 otherwise |
+| `sort=cpu` | Diagnostic CPU sorting override; default follows the engine/backend |
+| `webgl` | Force WebGL 2; otherwise try WebGPU first |
+| `mute`, `autoplay` | Start muted / start when ready; browser audio rules still apply |
+| `debug` | HUD and free camera: C, WASD/QE and drag; `window.__aw` developer handle |
 
-On a laptop with both an integrated and a discrete GPU, Chrome on Windows uses the integrated one
-unless Windows' Graphics settings give the browser the "High performance" GPU. It plays at 30 fps
-either way, but renders the splats sharper on the discrete one.
+## Credits and licensing
 
-## Credits
-
-- Scene: ["Artillery Passage"](https://superspl.at/scene/f4897475) by
-  [David Fletcher](https://superspl.at/user/artfletch), licensed
-  [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). Changed: compressed from the original
-  PLY to a chunked SOG (all splats kept). See `public/scene/LICENSE.txt`.
-- Sounds generated with [ElevenLabs](https://elevenlabs.io).
-- Engine: [PlayCanvas](https://github.com/playcanvas/engine) (MIT).
+- Original application by [Will Eastcott](https://github.com/willeastcott/splat-walk).
+  The upstream snapshot contains no application-code license file; public source availability
+  alone does not establish an open-source license for that code.
+- [Artillery Passage](https://superspl.at/scene/f4897475) by
+  [David Fletcher](https://superspl.at/user/artfletch), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  This fork decimates the existing SOG, reduces harmonics and recompresses derived variants.
+  Attribution and transformation details are in `public/scene/LICENSE.txt`.
+- Engine: [PlayCanvas](https://github.com/playcanvas/engine), MIT.
+- Original sounds generated with ElevenLabs; `tools/build-audio.mjs` prepares the audio assets.

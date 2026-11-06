@@ -73,7 +73,8 @@ const glslFS = /* glsl */ `
     void main(void) {
         vec2 n = ndc;
         vec2 q = n * uTan.xy;
-        vec2 rho = vec2(n.x, n.y * uTan.y / uTan.x);
+        // Calibrate lens radius to the original landscape lens, not viewport width.
+        vec2 rho = vec2(n.x * uTan.x / uTan.y, n.y) * uGlow.w;
         float r2 = dot(rho, rho);
         vec3 dR = vec3(q * (1.0 + (uLens.x + uLens.y) * r2), -1.0);
         vec3 dG = vec3(q * (1.0 + uLens.x * r2), -1.0);
@@ -96,11 +97,15 @@ const glslFS = /* glsl */ `
             t = hitPlane(uWallR, o, vG, t);
             t = hitPlane(uCeil, o, vG, t);
             vec2 uvG = projectUv(o + vG * t);
-            vec2 uvR = projectUv(o + dirAt(dR, f) * t);
-            vec2 uvB = projectUv(o + dirAt(dB, f) * t);
-            acc.r += toLin(textureLod(sceneTex, uvR, 0.0).rgb).r;
-            acc.g += toLin(textureLod(sceneTex, uvG, 0.0).rgb).g;
-            acc.b += toLin(textureLod(sceneTex, uvB, 0.0).rgb).b;
+            if (uLens.y == 0.0) {
+                acc += toLin(textureLod(sceneTex, uvG, 0.0).rgb);
+            } else {
+                vec2 uvR = projectUv(o + dirAt(dR, f) * t);
+                vec2 uvB = projectUv(o + dirAt(dB, f) * t);
+                acc.r += toLin(textureLod(sceneTex, uvR, 0.0).rgb).r;
+                acc.g += toLin(textureLod(sceneTex, uvG, 0.0).rgb).g;
+                acc.b += toLin(textureLod(sceneTex, uvB, 0.0).rgb).b;
+            }
             uvC += uvG;
         }
         vec3 col = acc / float(taps);
@@ -209,7 +214,7 @@ const wgslFS = /* wgsl */ `
         var output: FragmentOutput;
         let n = ndc;
         let q = n * uniform.uTan.xy;
-        let rho = vec2f(n.x, n.y * uniform.uTan.y / uniform.uTan.x);
+        let rho = vec2f(n.x * uniform.uTan.x / uniform.uTan.y, n.y) * uniform.uGlow.w;
         let r2 = dot(rho, rho);
         let lens = uniform.uLens;
         let dR = vec3f(q * (1.0 + (lens.x + lens.y) * r2), -1.0);
@@ -234,11 +239,15 @@ const wgslFS = /* wgsl */ `
             t = hitPlane(uniform.uWallR, o, vG, t);
             t = hitPlane(uniform.uCeil, o, vG, t);
             let uvG = projectUv(o + vG * t);
-            let uvR = projectUv(o + dirAt(dR, f) * t);
-            let uvB = projectUv(o + dirAt(dB, f) * t);
-            acc.x += toLin(tap(uvR, 0.0)).x;
-            acc.y += toLin(tap(uvG, 0.0)).y;
-            acc.z += toLin(tap(uvB, 0.0)).z;
+            if (lens.y == 0.0) {
+                acc += toLin(tap(uvG, 0.0));
+            } else {
+                let uvR = projectUv(o + dirAt(dR, f) * t);
+                let uvB = projectUv(o + dirAt(dB, f) * t);
+                acc.x += toLin(tap(uvR, 0.0)).x;
+                acc.y += toLin(tap(uvG, 0.0)).y;
+                acc.z += toLin(tap(uvB, 0.0)).z;
+            }
             uvC += uvG;
         }
         var col = acc / f32(taps);
@@ -303,7 +312,7 @@ export class FilmPass extends RenderPassShaderQuad {
         this.ceil = new Float32Array(4);
         this.lens = new Float32Array([0.03, 0.0025, 0.22, 0.17]);
         this.look = new Float32Array([0.026, 1, 0.12, 1]);
-        this.glow = new Float32Array([0.06, 0.55, 5, 0]);
+        this.glow = new Float32Array([0.06, 0.55, 5, 0.5625]);
         this.res = new Float32Array(4);
     }
 

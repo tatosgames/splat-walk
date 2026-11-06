@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Splat Walk Benchmark</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+    <div id="stage" inert>
+        <canvas id="canvas"></canvas>
+        <div id="paused" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="30" height="30"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+        </div>
+        <div id="hint">Drag to look around · Tap to reveal the Gaussians</div>
+        <button id="pausebtn" type="button" aria-label="Pause">
+            <svg class="i-pause" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+            <svg class="i-play" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+        </button>
+        <span id="quality-status" role="status"></span>
+        <div id="view-controls">
+            <button id="recenter" type="button">Recenter</button>
+            <button id="mute" type="button">Mute</button>
+            <label class="quality-label">Quality <select id="quality" aria-label="Rendering quality">
+                <option value="auto">Auto</option><option value="performance">Performance</option><option value="balanced">Balanced</option><option value="quality">Original (80 MB)</option>
+            </select></label>
+        </div>
+    </div>
+
+    <div id="overlay" class="loading">
+        <div class="card">
+            <div class="title">Artillery Passage</div>
+            <div class="subtitle">Spitalfields, London</div>
+            <div class="progress"><div class="bar"></div></div>
+            <div class="status" role="status">Loading scene&hellip;</div>
+            <button id="retry" type="button" hidden>Retry loading</button>
+            <button id="play" type="button" aria-label="Play">
+                <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+            </button>
+            <div class="credit">Gaussian splat scan &ldquo;Artillery Passage&rdquo; by
+                <a href="https://superspl.at/user/artfletch" target="_blank" rel="noopener">David Fletcher</a>,
+                <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
+            <div class="keys">Drag to look around &middot; tap to reveal the Gaussians<br>Space pause &middot; R restart &middot; F fullscreen &middot; M mute</div>
+        </div>
+    </div>
+
+    <div id="hud"></div>
+
+    <script type="module" src="/tools/performance/browser.js"></script>
+</body>
+</html>

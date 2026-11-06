@@ -98,10 +98,11 @@ export class Soundtrack {
         const names = [...new Set([...SCATTER, ...PLACED].map(e => e.name)), 'fx-burn', 'fx-restore'];
         this.buffers = {};
         this.beds = {};
-        await Promise.all([
+        const optional = await Promise.allSettled([
             ...names.map(async (n) => { this.buffers[n] = await fetchBuf(`${n}.mp3`); }),
             ...BEDS.map(async (b) => { this.beds[b.name] = this._loop(await fetchBuf(`${b.name}.mp3`), 1.5); })
         ]);
+        for (const result of optional) if (result.status === 'rejected') console.warn('Optional sound unavailable:', result.reason);
         this._buildGraph();
         this.scatter = this._planScatter(this.walk.duration);
         this.ready = true;
@@ -254,7 +255,7 @@ export class Soundtrack {
      * Start the soundtrack at video time `t`. Resolves true once the clock is running, false when
      * audio isn't available (no gesture yet, or no Web Audio) - the video then keeps its own clock.
      */
-    async start(t, duration) {
+    async start(t, duration, canStart = () => true) {
         if (!this.ready) return false;
         const ctx = this.ctx;
         if (ctx.state !== 'running') {
@@ -263,6 +264,7 @@ export class Soundtrack {
             } catch { /* ignore */ }
             if (ctx.state !== 'running') return false;
         }
+        if (!canStart()) return false;
         this.stop(true);
         const now = ctx.currentTime + 0.05;
         this.t0 = now - t;
@@ -362,7 +364,7 @@ export class Soundtrack {
      */
     playFx(name, db = -10) {
         const buf = this.buffers?.[name];
-        if (!buf || !this.ctx || this.muted) return;
+        if (!buf || !this.ready || !this.fxBus || !this.ctx || this.muted) return;
         const ctx = this.ctx;
         if (ctx.state !== 'running') ctx.resume().catch(() => {});
         const src = ctx.createBufferSource();
@@ -375,7 +377,7 @@ export class Soundtrack {
     }
 
     stop(immediate = false) {
-        if (!this.ctx) return;
+        if (!this.ctx || !this.master) return;
         const now = this.ctx.currentTime;
         const g = this.master.gain;
         g.cancelScheduledValues(0);

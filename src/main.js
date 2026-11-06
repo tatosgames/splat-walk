@@ -4,34 +4,48 @@ import { Walk, plyToWorld, wallsAt } from './walk.js';
 import { ROUTE } from './route.js';
 import { Soundtrack } from './audio.js';
 import { BurnFx } from './burn.js';
+import { settings, numeric, outputRatio, viewTanHalf } from './settings.js';
+import { CameraLook } from './camera-look.js';
 
 const params = new URLSearchParams(location.search);
+const config = settings(params);
+// Only benchmark.html installs this observer; the demo loads no benchmark module.
+const probe = globalThis.__splatProbe;
+probe?.mark('main');
 const DEBUG = params.has('debug');
 if (DEBUG) document.body.classList.add('debug');
 
-// ---- the "camera": a phone-like main lens filming 1080p at 30 fps ----
-const DISPLAY_VFOV = Number(params.get('fov') ?? 50);   // ~ 24 mm equivalent horizontally
+// ---- the camera: a phone-like lens, with an explicit pixel and frame budget ----
+const DISPLAY_VFOV = config.fov;
 const OVERSCAN = 1.1;                                  // spare image around the frame for shake, blur and lens
-const FPS = Number(params.get('fps') ?? 30);
-const SHUTTER = Number(params.get('shutter') ?? 1 / 80);
-const READOUT = Number(params.get('readout') ?? 0.016);
-const MAX_HEIGHT = Number(params.get('maxh') ?? 1080);
-const SCENE_URL = params.get('scene') ?? './scene/lod-meta.json';
+let FPS = config.fps;
+const SHUTTER = config.shutter;
+const READOUT = config.readout;
+const SCENE_URL = config.scene;
 
 const canvas = document.getElementById('canvas');
 const stage = document.getElementById('stage');
 const overlay = document.getElementById('overlay');
 const hud = document.getElementById('hud');
 const hint = document.getElementById('hint');
+const pauseBtn = document.getElementById('pausebtn');
 const bar = overlay.querySelector('.bar');
 const status = overlay.querySelector('.status');
 
+probe?.mark('deviceStart');
 const device = await pc.createGraphicsDevice(canvas, {
     deviceTypes: params.has('webgl') ? [pc.DEVICETYPE_WEBGL2] : [pc.DEVICETYPE_WEBGPU, pc.DEVICETYPE_WEBGL2],
     antialias: false,
     alpha: false,
     powerPreference: 'high-performance'
+}).catch(err => {
+    status.textContent = 'This browser could not start the 3D renderer. Try an updated browser.';
+    const retry = document.getElementById('retry');
+    retry.hidden = false; retry.onclick = () => location.reload();
+    probe?.fail(String(err));
+    throw err;
 });
+probe?.mark('deviceReady');
 
 const opts = new pc.AppOptions();
 opts.graphicsDevice = device;
@@ -48,15 +62,23 @@ app.setCanvasResolution(pc.RESOLUTION_AUTO);
 app.autoRender = false;   // frames are rendered on the video's own clock
 
 let laidOut = '';
+let aspect = 16 / 9;
+const originalTan = Math.tan(DISPLAY_VFOV * Math.PI / 360);
+let tanHalfDisplay = originalTan;
+let viewCamera;
 function layout() {
     const ww = window.innerWidth, wh = window.innerHeight;
     laidOut = `${ww}x${wh}x${window.devicePixelRatio}`;
-    let w = ww, h = Math.round(ww * 9 / 16);
-    if (h > wh) { h = wh; w = Math.round(wh * 16 / 9); }
+    const immersive = wh > ww || matchMedia('(pointer: coarse)').matches;
+    let w = ww, h = immersive ? wh : Math.round(ww * 9 / 16);
+    if (!immersive && h > wh) { h = wh; w = Math.round(wh * 16 / 9); }
+    aspect = w / h;
+    tanHalfDisplay = viewTanHalf(DISPLAY_VFOV, aspect);
+    if (viewCamera) viewCamera.camera.fov = 2 * Math.atan(tanHalfDisplay * OVERSCAN) * 180 / Math.PI;
     stage.style.width = `${w}px`;
     stage.style.height = `${h}px`;
     const dpr = window.devicePixelRatio || 1;
-    device.maxPixelRatio = Math.max(0.5, Math.min(dpr, 2, MAX_HEIGHT / h));
+    device.maxPixelRatio = Math.max(0.1, outputRatio(w, h, dpr, config));
     app.resizeCanvas(w, h);
     app.renderNextFrame = true;
 }
@@ -66,14 +88,15 @@ app.start();
 
 // ---- splat settings: smooth, pop-free view-dependent colour, everything at full detail ----
 const gs = app.scene.gsplat;
+if (params.get('sort') === 'cpu') gs.renderer = pc.GSPLAT_RENDERER_RASTER_CPU_SORT;
+gs.alphaClipForward = numeric(params, 'alpha', config.profile === 'performance' ? 0.02 : 1 / 255, 1 / 255, 0.1);
 gs.radialSorting = true;          // turning the head doesn't re-order splats
-gs.colorUpdateAngle = Number(params.get('cua') ?? 0.6);
+gs.colorUpdateAngle = numeric(params, 'cua', 0.6, 0.01, 15);
 gs.splatBudget = 0;               // no LOD budget: the whole passage at its finest level
 gs.lodUnderfillLimit = 0;
 
 // ---- scene camera renders the splats into an HDR target, the film pass makes it footage ----
 const camera = new pc.Entity('camera');
-const tanHalfDisplay = Math.tan(DISPLAY_VFOV * Math.PI / 360);
 camera.addComponent('camera', {
     clearColor: new pc.Color(0.84, 0.855, 0.875),
     fov: 2 * Math.atan(tanHalfDisplay * OVERSCAN) * 180 / Math.PI,
@@ -82,6 +105,7 @@ camera.addComponent('camera', {
     gammaCorrection: pc.GAMMA_SRGB,
     toneMapping: pc.TONEMAP_LINEAR
 });
+viewCamera = camera;
 app.root.addChild(camera);
 
 const hdr = device.textureHalfFloatRenderable ? pc.PIXELFORMAT_RGBA16F : pc.PIXELFORMAT_RGBA8;
@@ -106,11 +130,13 @@ const filmCam = new pc.Entity('film');
 filmCam.addComponent('camera', { priority: 1, layers: [filmLayer.id], clearColorBuffer: false, clearDepthBuffer: false });
 app.root.addChild(filmCam);
 const film = new FilmPass(device, sceneTexture);
+// The light preset shares one RGB ray instead of sampling each colour separately.
+if (config.profile === 'performance' && params.get('film') !== 'full') film.lens[1] = 0;
 film.init(null);
 filmCam.camera.framePasses = [film];
 
 // the splats render at `renderScale` of the output (chosen by the benchmark to hold the frame rate)
-let renderScale = Number(params.get('scale') ?? 1);
+let renderScale = numeric(params, 'scale', config.profile === 'performance' ? 0.7 : 1, 0.35, 1);
 function resizeTarget() {
     const w = Math.max(4, Math.round(device.width * OVERSCAN * renderScale));
     const h = Math.max(4, Math.round(device.height * OVERSCAN * renderScale));
@@ -127,7 +153,8 @@ const pA = new pc.Vec3(), qA = new pc.Quat();
 const ONE = new pc.Vec3(1, 1, 1);
 
 function poseMatrix(t, out) {
-    walk.sample(t, pA, qA);
+    walk.sample(t, pA, qA, look.gazeWeight);
+    look.apply(qA);
     return out.setTRS(pA, qA, ONE);
 }
 
@@ -142,12 +169,13 @@ function planeToCamera(nx, ny, nz, d, out) {
 
 function applyShot(t, exposure = true) {
     const H = 0.5 * (SHUTTER + READOUT);
-    walk.sample(t, pos, rot);
+    walk.sample(t, pos, rot, look.gazeWeight);
+    look.apply(rot);
     camera.setPosition(pos);
     camera.setRotation(rot);
     Wt.setTRS(pos, rot, ONE);
     Winv.copy(Wt).invert();
-    if (exposure) {
+    if (exposure && !look.dragging && !look.settling) {
         M.mul2(Winv, poseMatrix(t - H, W)); film.M0.set(M.data);
         M.mul2(Winv, poseMatrix(t + H, W)); film.M2.set(M.data);
     } else {
@@ -172,14 +200,14 @@ function applyShot(t, exposure = true) {
 
 // ---- dynamic resolution: hold the frame rate by trimming the splat render size ----
 const scaler = {
-    ema: 0, last: 0, drops: 0,
-    reset() { this.ema = 0; this.last = performance.now(); this.drops = 0; },
+    ema: 0, last: 0, drops: 0, overloaded: 0,
+    reset() { this.ema = 0; this.last = performance.now(); this.drops = 0; this.overloaded = 0; },
     // called after each video frame is produced; `skipped` = video frames missed since the last
     frame(skipped) {
         if (params.has('scale')) return;
         const gp = device.gpuProfiler;
         const budget = 0.86 * 1000 / FPS;
-        const ms = gp?.enabled ? gp._frameTime : 0;
+        const ms = gp?.enabled ? gp.frameTime : 0;
         if (ms > 0) this.ema = this.ema ? this.ema + (ms - this.ema) * 0.12 : ms;
         if (skipped > 0) this.drops += skipped;
         const now = performance.now();
@@ -197,19 +225,27 @@ const scaler = {
             renderScale = s;
             if (DEBUG) console.log(`render scale ${s.toFixed(3)} (gpu ${this.ema.toFixed(1)} ms, drops ${this.drops})`);
         }
+        // Keep the requested 60 fps visible as a failed target on constrained devices.
+        if (config.auto && !params.has('fps') && FPS === 60 && s <= 0.5 && this.drops > 2) this.overloaded++;
+        else this.overloaded = 0;
+        if (this.overloaded >= 4) {
+            FPS = 30; lastIndex = -1;
+            document.getElementById('quality-status').textContent = '30 fps · device limit';
+        }
         this.drops = 0;
     }
 };
 
 // ---- playback state ----
 let state = 'loading';     // loading | bench | ready | playing | paused | ended | free
-let tPlay = Number(params.get('t') ?? 0);   // shot time of the frame on screen
+let tPlay = numeric(params, 't', 0, 0, walk.duration);   // shot time of the frame on screen
 let clock = tPlay;                           // running clock while playing
 let lastIndex = -1;
 let frame = 0;
+let lastFrameAt = -Infinity;
 let dtAvg = 1 / 60;
-let rate = Number(params.get('rate') ?? 1);
-const knobs = { taps: Number(params.get('taps') ?? 10) };
+let rate = numeric(params, 'rate', 1, 0.1, 4);
+const knobs = { taps: config.taps };
 
 // ---- tap to burn the world down to its Gaussians ----
 const burn = new BurnFx(app);
@@ -222,7 +258,10 @@ function tapPoint(clientX, clientY) {
     const r = canvas.getBoundingClientRect();
     const nx = ((clientX - r.left) / r.width) * 2 - 1;
     const ny = 1 - ((clientY - r.top) / r.height) * 2;
-    rayDir.set(nx * tanHalfDisplay * 16 / 9, ny * tanHalfDisplay, -1);
+    const lensScale = tanHalfDisplay / originalTan * 0.5625;
+    const radius2 = (nx * nx * aspect * aspect + ny * ny) * lensScale * lensScale;
+    const distortion = 1 + film.lens[0] * radius2;
+    rayDir.set(nx * tanHalfDisplay * aspect * distortion, ny * tanHalfDisplay * distortion, -1);
     camera.getRotation().transformVector(rayDir, rayDir).normalize();
     const o = camera.getPosition();
     const fy = walk.floorAt(o.z), wl = wallsAt(o.z);
@@ -253,14 +292,27 @@ burn.onRestore = () => soundtrack.playFx('fx-restore', -11);
 // ---- sound: while it plays, the audio clock drives the pictures ----
 const soundtrack = new Soundtrack(walk);
 soundtrack.muted = params.has('mute');
-const soundLoad = soundtrack.load().catch((err) => console.warn('soundtrack unavailable:', err));
+// Start decoding after the first user gesture; images never wait for optional audio.
+let soundLoad;
+function loadSound() { return soundLoad ??= soundtrack.load().catch(err => console.warn('soundtrack unavailable:', err)); }
 let audioClock = false;   // video follows the soundtrack's clock
-let starting = false;     // waiting for the audio to start
+let starting = false;
+let soundGeneration = 0;
+function showControls() {
+    document.body.classList.add('controls');
+    clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => document.body.classList.remove('controls'), 3000);
+}
+const look = new CameraLook(canvas, ignite, () => {
+    if (state !== 'playing') app.renderNextFrame = true;
+}, showControls, () => !['loading', 'bench'].includes(state));
 
 function renderFrame() {
+    lastFrameAt = performance.now();
+    film.glow[3] = tanHalfDisplay / originalTan * 0.5625;
     frame++;
-    film.tan[0] = tanHalfDisplay * 16 / 9; film.tan[1] = tanHalfDisplay;
-    film.tan[2] = tanHalfDisplay * OVERSCAN * 16 / 9; film.tan[3] = tanHalfDisplay * OVERSCAN;
+    film.tan[0] = tanHalfDisplay * aspect; film.tan[1] = tanHalfDisplay;
+    film.tan[2] = tanHalfDisplay * OVERSCAN * aspect; film.tan[3] = tanHalfDisplay * OVERSCAN;
     film.timing[2] = frame % 100000;
     film.timing[3] = knobs.taps;
     film.look[1] = Math.min(1, 1080 / device.height);
@@ -269,6 +321,10 @@ function renderFrame() {
 }
 
 app.on('update', (dt) => {
+    if (probe?.frozen) return;
+    const looking = look.update(dt);
+    const interactionDue = performance.now() - lastFrameAt >= 1000 / FPS - 1;
+    if (looking && interactionDue && !['loading', 'bench', 'playing'].includes(state)) app.renderNextFrame = true;
     dtAvg += (dt - dtAvg) * 0.05;
     // resize events can arrive before the new size is visible: compare every frame
     if (laidOut !== `${window.innerWidth}x${window.innerHeight}x${window.devicePixelRatio}`) layout();
@@ -294,7 +350,7 @@ app.on('update', (dt) => {
         film.M2.set(pc.Mat4.IDENTITY.data);
         film.look[3] = 1;
         renderFrame();
-    } else if (app.renderNextFrame || state === 'loading' || (burn.active && state !== 'bench')) {
+    } else if (app.renderNextFrame || state === 'loading' || (burn.active && interactionDue && state !== 'bench')) {
         // paused, ready or ended: hold the frame, re-render only when something changed (or
         // while a burn is playing out over the held frame)
         if (state !== 'loading') applyShot(tPlay, state !== 'ready');
@@ -316,7 +372,7 @@ app.on('update', (dt) => {
         const e = camera.getEulerAngles();
         hud.textContent = `t ${tPlay.toFixed(2)} / ${walk.duration.toFixed(1)}  ${state}  scale ${renderScale.toFixed(2)}\n` +
             `world ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}  ply ${(-p.x).toFixed(2)} ${(-p.y).toFixed(2)} ${p.z.toFixed(2)}\n` +
-            `euler ${e.x.toFixed(1)} ${e.y.toFixed(1)} ${e.z.toFixed(1)}  raf ${(1 / Math.max(dtAvg, 1e-3)).toFixed(0)}  gpu ${device.gpuProfiler?._frameTime?.toFixed(1) ?? '-'}  ` +
+            `euler ${e.x.toFixed(1)} ${e.y.toFixed(1)} ${e.z.toFixed(1)}  raf ${(1 / Math.max(dtAvg, 1e-3)).toFixed(0)}  gpu ${device.gpuProfiler?.frameTime?.toFixed(1) ?? '-'}  ` +
             `${device.width}x${device.height} rt ${sceneTarget.width}x${sceneTarget.height} ${device.deviceType}`;
     }
 });
@@ -325,8 +381,9 @@ app.on('update', (dt) => {
 const bench = {
     t: 0, frames: 0, gpu: 0, pixelPart: 0, wall: 0, onDone: null,
     start(onDone) {
+        probe?.mark('benchmarkStart');
         this.onDone = onDone;
-        this.t = 0; this.frames = 0; this.gpu = 0; this.pixelPart = 0; this.wall = 0;
+        this.t = 0; this.frames = 0; this.gpu = 0; this.pixelPart = 0; this.wall = 0; this.n = 0;
         if (device.gpuProfiler) device.gpuProfiler.enabled = true;
         state = 'bench';
     },
@@ -335,10 +392,10 @@ const bench = {
         const t0 = 16;
         if (this.frames > 0) this.wall += dt;
         const gp = device.gpuProfiler;
-        if (this.frames > 8 && gp?._frameTime > 0) {
-            this.gpu += gp._frameTime;
+        if (this.frames > 8 && gp?.frameTime > 0) {
+            this.gpu += gp.frameTime;
             let px = 0;
-            for (const [k, v] of gp._passTimings) if (/Forward|Film|Compose/i.test(k)) px += v;
+            for (const [k, v] of gp.passTimings) if (/Forward|Film|Compose/i.test(k) || k === film.name) px += v;
             this.pixelPart += px;
             this.n = (this.n ?? 0) + 1;
         }
@@ -346,7 +403,7 @@ const bench = {
         film.look[3] = 0;
         renderFrame();
         this.frames++;
-        if (this.frames >= 60) this.finish();
+        if (this.frames >= (config.profile === 'performance' ? 32 : 60)) this.finish();
     },
     finish() {
         const budget = 0.85 * 1000 / FPS;
@@ -362,8 +419,9 @@ const bench = {
         let s = 1;
         if (gpu > budget && px > 0) s = Math.sqrt(Math.max(0.05, (budget - fixed) / px));
         if (!params.has('scale')) renderScale = Math.max(0.5, Math.min(1, s * renderScale));
-        console.log(`bench: gpu ${gpu.toFixed(1)} ms (pixels ${px.toFixed(1)}), budget ${budget.toFixed(1)} -> render scale ${renderScale.toFixed(2)}`);
+        console.log(`bench: ${this.n > 10 ? 'GPU' : 'frame interval (GPU timer unavailable)'} ${gpu.toFixed(1)} ms (estimated pixel part ${px.toFixed(1)}), budget ${budget.toFixed(1)} -> render scale ${renderScale.toFixed(2)}`);
         state = 'ready';
+        probe?.mark('ready');
         this.onDone?.();
     }
 };
@@ -393,16 +451,17 @@ if (DEBUG) {
 }
 
 // ---- load the scene ----
-const isLod = SCENE_URL.endsWith('lod-meta.json');
+const isLod = SCENE_URL.split(/[?#]/)[0].endsWith('lod-meta.json');
 const asset = new pc.Asset('artillery-passage', 'gsplat', { url: SCENE_URL });
 asset.on('progress', (received, total) => {
     if (total && !isLod) {
-        bar.style.width = `${(100 * received / total).toFixed(1)}%`;
+        bar.style.transform = `scaleX(${Math.min(1, received / total).toFixed(4)})`;
         status.textContent = `Loading scene… ${(received / 1048576).toFixed(0)} / ${(total / 1048576).toFixed(0)} MB`;
     }
 });
 app.assets.add(asset);
 asset.ready(() => {
+    probe?.mark('manifestReady');
     const splat = new pc.Entity('splat');
     splat.addComponent('gsplat', { asset, unified: true });
     splat.setLocalEulerAngles(0, 0, 180);
@@ -417,11 +476,12 @@ asset.ready(() => {
         if (cam !== camera.camera.camera && cam !== camera.camera) return;
         total = Math.max(total, loading);
         if (isLod && total > 0) {
-            bar.style.width = `${(100 * (1 - loading / total)).toFixed(1)}%`;
+            bar.style.transform = `scaleX(${(1 - loading / total).toFixed(4)})`;
             status.textContent = `Loading scene… ${total - loading} / ${total}`;
         }
         settled = ready && loading === 0 ? settled + 1 : 0;
-        if (settled >= 20) {
+        if (settled >= (isLod ? 20 : 3)) {
+            probe?.mark('streamSettled');
             app.systems.gsplat.off('frame:ready', onFrame);
             status.textContent = 'Preparing…';
             bench.start(() => {
@@ -442,20 +502,28 @@ asset.ready(() => {
     const keepAlive = () => { if (state === 'loading') renderFrame(); else app.off('update', keepAlive); };
     app.on('update', keepAlive);
 });
-asset.on('error', (err) => { status.textContent = `Failed to load: ${err}`; });
+asset.on('error', (err) => {
+    status.textContent = 'Scene unavailable. Check your connection and retry.';
+    document.getElementById('retry').hidden = false;
+    probe?.fail(String(err)); console.error(err);
+});
+probe?.mark('sceneRequest');
 app.assets.load(asset);
 
 // ---- controls ----
 function play() {
     if (state === 'loading' || state === 'bench') return;
-    if (state === 'ended' || tPlay >= walk.duration) { tPlay = 0; }
+    if (state === 'ended' || tPlay >= walk.duration) { tPlay = 0; look.reset(true); }
     clock = tPlay;
     lastIndex = -1;
     scaler.reset();
     state = 'playing';
+    stage.inert = false;
     overlay.classList.add('hidden');
+    overlay.inert = true;
     document.body.classList.add('playing');
     document.body.classList.remove('paused');
+    pauseBtn.setAttribute('aria-label', 'Pause');
     startSound();
     // the first time through, say once that the picture can be touched
     if (!hintShown) {
@@ -465,40 +533,48 @@ function play() {
     }
 }
 let hintShown = false;
-// start the soundtrack at the current shot time; the pictures wait for it (a few ms) and then
-// follow its clock. Without sound (no Web Audio, blocked autoplay, odd playback rate) they run alone.
+// Images start immediately. When audio is decoded it joins at the current shot time.
 async function startSound() {
     audioClock = false;
-    if (rate !== 1) return;
-    starting = true;
-    await soundLoad;
-    const ok = await soundtrack.start(tPlay, walk.duration);
-    starting = false;
-    if (state !== 'playing') { soundtrack.stop(); return; }
+    if (rate !== 1 || soundtrack.muted) return;
+    const generation = ++soundGeneration;
+    const pending = loadSound();
+    soundtrack.ctx?.resume().catch(() => {});
+    await pending;
+    if (generation !== soundGeneration || state !== 'playing') return;
+    const current = () => generation === soundGeneration && state === 'playing';
+    const ok = await soundtrack.start(tPlay, walk.duration, current);
+    if (!current()) return;
     audioClock = ok;
     clock = tPlay;
 }
 function pause() {
     if (state !== 'playing') return;
     state = 'paused';
+    soundGeneration++;
     soundtrack.stop();
     audioClock = false;
     document.body.classList.remove('playing');
     document.body.classList.add('paused');
+    pauseBtn.setAttribute('aria-label', 'Play');
     app.renderNextFrame = true;
 }
 function end() {
     state = 'ended';
+    soundGeneration++;
     soundtrack.stop();
     audioClock = false;
     document.body.classList.remove('playing');
     setTimeout(() => {
         if (state !== 'ended') return;
         overlay.classList.remove('hidden');
+        overlay.inert = false;
+        stage.inert = true;
         overlay.querySelector('#play').setAttribute('aria-label', 'Replay');
     }, 500);
 }
 function restart() {
+    look.reset(true);
     tPlay = 0;
     state = 'paused';
     play();
@@ -506,6 +582,7 @@ function restart() {
 
 document.getElementById('play').addEventListener('click', () => play());
 window.addEventListener('keydown', (e) => {
+    if (e.target.closest?.('button, select, input, textarea, a')) return;
     if (e.code === 'Space') {
         e.preventDefault();
         if (state === 'playing') pause();
@@ -516,7 +593,7 @@ window.addEventListener('keydown', (e) => {
         if (document.fullscreenElement) document.exitFullscreen();
         else document.documentElement.requestFullscreen?.();
     } else if (e.code === 'KeyM') {
-        soundtrack.setMuted(!soundtrack.muted);
+        toggleMute();
     } else if (DEBUG && e.code === 'KeyC' && state !== 'loading' && state !== 'bench') {
         if (state === 'free') { state = 'paused'; app.renderNextFrame = true; } else {
             state = 'free';
@@ -526,22 +603,30 @@ window.addEventListener('keydown', (e) => {
     }
 });
 // tapping the picture burns it; the corner button (or Space) pauses
-canvas.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    ignite(e.clientX, e.clientY);
-});
-const pauseBtn = document.getElementById('pausebtn');
+// CameraLook handles tap versus drag and pointer cancellation.
 pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (state === 'playing') pause(); else if (state === 'paused') play();
 });
 // show the controls (and the cursor) while the pointer moves, like a video player
 let controlsTimer = 0;
-window.addEventListener('pointermove', () => {
-    document.body.classList.add('controls');
-    clearTimeout(controlsTimer);
-    controlsTimer = setTimeout(() => document.body.classList.remove('controls'), 2200);
+window.addEventListener('pointermove', showControls);
+document.getElementById('recenter').addEventListener('click', () => { look.reset(); showControls(); app.renderNextFrame = true; });
+function toggleMute() {
+    soundtrack.setMuted(!soundtrack.muted);
+    document.getElementById('mute').textContent = soundtrack.muted ? 'Sound on' : 'Mute';
+    if (!soundtrack.muted && state === 'playing' && !soundtrack.healthy) startSound();
+}
+document.getElementById('mute').textContent = soundtrack.muted ? 'Sound on' : 'Mute';
+document.getElementById('mute').addEventListener('click', toggleMute);
+const profileSelect = document.getElementById('quality');
+profileSelect.value = config.auto ? 'auto' : config.profile;
+profileSelect.addEventListener('change', () => {
+    const query = new URLSearchParams(location.search);
+    query.set('profile', profileSelect.value); query.delete('scene');
+    location.search = query.toString();
 });
+document.getElementById('retry').addEventListener('click', () => location.reload());
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
 // dev handle
@@ -555,7 +640,7 @@ window.__aw = {
         tPlay = t; clock = t; lastIndex = -1; applyShot(t); app.renderNextFrame = true;
         if (state === 'playing') startSound();
     },
-    soundtrack,
+    soundtrack, cameraLook: look, burn, config,
     // dev: render the shot at time t and save the canvas as captures/<name>.png
     async grab(t, name) {
         if (state === 'ended' || state === 'ready') state = 'paused';
@@ -580,3 +665,28 @@ window.__aw = {
         camera.setEulerAngles(pitch, yaw, 0);
     }
 };
+
+probe?.attach({
+    ...window.__aw, get time() { return tPlay; }, get state() { return state; },
+    get scale() { return renderScale; }, get fps() { return FPS; }, sceneUrl: SCENE_URL, engine: pc.version,
+    reset() { pause(); state = 'paused'; look.reset(true); tPlay = 0; clock = 0; lastIndex = -1; clearBurn(); },
+    ignite() { const r = canvas.getBoundingClientRect(); ignite(r.left + r.width / 2, r.top + r.height / 2); },
+    capture(t, effect = -1) {
+        pause(); state = 'paused'; look.reset(true); probe.frozen = true; clearBurn();
+        tPlay = t; clock = t; applyShot(t); frame = 99;
+        if (effect >= 0) {
+            burn.trigger(tapPoint(innerWidth / 2, innerHeight / 2));
+            burn.slots[0].t = effect; burn.slots[0].restored = true;
+        }
+        burn.update(0, camera.getPosition());
+        camera.camera.clearColor = skyColor.lerp(SKY, NIGHT, burn.darkness);
+        film.glow[0] = 0.06 + 0.05 * burn.darkness;
+        film.glow[1] = 0.55 - 0.05 * burn.darkness;
+        renderFrame(); app.render(); app.renderNextFrame = false;
+    }
+});
+function clearBurn() {
+    for (const slot of burn.slots) { slot.t = -1; slot.restored = false; }
+    burn._dirty = true;
+    if (burn.installed) burn.update(0, camera.getPosition());
+}

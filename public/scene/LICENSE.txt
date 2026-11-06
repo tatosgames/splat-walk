@@ -4,3 +4,8 @@ Source: https://superspl.at/scene/f4897475
 License: CC Attribution (Creative Commons Attribution)
 License URL: http://creativecommons.org/licenses/by/4.0/
 Requirements: Author must be credited. Commercial use is allowed.
+Derived variants in this fork:
+- mobile-lite-v1.sog: decoded the existing SOG, merge-decimated via 500,000 to 250,000 Gaussians, reduced SH bands from 3 to 0, recompressed as SOG v2.
+- balanced-v1.sog: decoded the existing SOG, merge-decimated to 1,000,000 Gaussians, reduced SH bands from 3 to 1, recompressed as SOG v2.
+Tool: @playcanvas/splat-transform 3.10.3. Existing compression losses are not reversed.
+The original five spatial chunks and their data textures remain available unchanged.

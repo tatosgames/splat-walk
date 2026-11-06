@@ -377,7 +377,7 @@ export class Walk {
      * @param {Quat} rot - receives the rotation
      * @returns {object} debug values
      */
-    sample(t, pos, rot) {
+    sample(t, pos, rot, gazeWeight = 1) {
         const cfg = this.cfg;
         const N = this.noise;
         const { s, v, ph } = this._lookup(t);
@@ -437,8 +437,8 @@ export class Walk {
         const tilt = clamp((gz.yaw - gz.base) * 0.03, -1.8, 1.8);
         const dip = Math.min(1.2, Math.abs(gz.yawVel) * 0.01);
 
-        const Yd = gz.yaw + gy + ny;
-        const Pd = gz.pitch + gp + np - jolt - dip;
+        const Yd = gz.base + (gz.yaw - gz.base) * gazeWeight + gy + ny;
+        const Pd = gz.pitch * gazeWeight + gp + np - jolt - dip;
         const Rd = gr + nr + lean + tilt;
         qYaw.setFromAxisAngle(Vec3.UP, Yd);
         qPitch.setFromAxisAngle(Vec3.RIGHT, Pd);

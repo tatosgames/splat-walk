@@ -1,0 +1,184 @@
+{
+  "sourceHistory": "Existing lossy chunked SOG; original PLY was not available locally. All generated PLY intermediates retain this provenance.",
+  "recipes": [
+    {
+      "name": "mobile",
+      "source": "public/scene/lod-meta.json",
+      "sourceIsLossy": true,
+      "sourceManifestSha256": "11cecf43c7ab179fc4878a6720d1f01223f469d05760e4459d32344d402be656",
+      "tool": "@playcanvas/splat-transform@3.10.3",
+      "commands": [
+        [
+          "--no-tty",
+          "public/scene/lod-meta.json",
+          "--filter-nan",
+          "--decimate",
+          "500000",
+          ".performance\\scene-work\\mobile-500000-source-sh.ply"
+        ],
+        [
+          "--no-tty",
+          "--gpu",
+          "cpu",
+          ".performance\\scene-work\\mobile-500000-source-sh.ply",
+          "--filter-harmonics",
+          "0",
+          ".performance\\scene-work\\mobile-v1.sog"
+        ]
+      ],
+      "gaussians": 500000,
+      "harmonics": 0,
+      "output": ".performance\\scene-work\\mobile-v1.sog",
+      "bytes": 6155509,
+      "sha256": "d7cddaa7a1327e8878bc397aaf1b1610830af932e74e11ac3f85facc81b0ea20",
+      "attribution": "Artillery Passage by David Fletcher, CC BY 4.0",
+      "sourceUrl": "https://superspl.at/scene/f4897475",
+      "changes": "Decoded source, removed invalid entries, merge-decimated with source harmonics, then reduced harmonic bands and recompressed. Original PLY information is not recovered from SOG."
+    },
+    {
+      "name": "mobile-lite",
+      "source": ".performance/scene-work/mobile-500000-source-sh.ply",
+      "sourceIsLossy": null,
+      "sourceManifestSha256": "e884f0350ad05b2871672dd5a1370d4ddfeeaf91453c3b2874f3791e287dceca",
+      "tool": "@playcanvas/splat-transform@3.10.3",
+      "commands": [
+        [
+          "--no-tty",
+          ".performance/scene-work/mobile-500000-source-sh.ply",
+          "--filter-nan",
+          "--decimate",
+          "250000",
+          ".performance\\scene-work\\mobile-lite-250000-source-sh.ply"
+        ],
+        [
+          "--no-tty",
+          "--gpu",
+          "cpu",
+          ".performance\\scene-work\\mobile-lite-250000-source-sh.ply",
+          "--filter-harmonics",
+          "0",
+          ".performance\\scene-work\\mobile-lite-v1.sog"
+        ]
+      ],
+      "gaussians": 250000,
+      "harmonics": 0,
+      "output": ".performance\\scene-work\\mobile-lite-v1.sog",
+      "bytes": 3124504,
+      "sha256": "3f7572e0999fa0554f78c6f3769e372ced975717cb0c4e8f296f711a66a53231",
+      "attribution": "Artillery Passage by David Fletcher, CC BY 4.0",
+      "sourceUrl": "https://superspl.at/scene/f4897475",
+      "changes": "Decoded source, removed invalid entries, merge-decimated with source harmonics, then reduced harmonic bands and recompressed. Original PLY information is not recovered from SOG."
+    },
+    {
+      "name": "balanced",
+      "source": "public/scene/lod-meta.json",
+      "sourceIsLossy": true,
+      "sourceManifestSha256": "11cecf43c7ab179fc4878a6720d1f01223f469d05760e4459d32344d402be656",
+      "tool": "@playcanvas/splat-transform@3.10.3",
+      "commands": [
+        [
+          "--no-tty",
+          "public/scene/lod-meta.json",
+          "--filter-nan",
+          "--decimate",
+          "1000000",
+          ".performance/scene-work/balanced-1000000-source-sh.ply"
+        ],
+        [
+          "--no-tty",
+          "--gpu",
+          "1",
+          ".performance/scene-work/balanced-1000000-source-sh.ply",
+          "--filter-harmonics",
+          "1",
+          ".performance\\scene-work\\balanced-v1.sog"
+        ]
+      ],
+      "reusedIntermediate": {
+        "path": ".performance/scene-work/balanced-1000000-source-sh.ply",
+        "sha256": "293f1373e869caf8a46f7631cccca8978f716dcc20fe482fbeaf58b6eef2591d"
+      },
+      "gaussians": 1000000,
+      "harmonics": 1,
+      "output": ".performance\\scene-work\\balanced-v1.sog",
+      "bytes": 14490298,
+      "sha256": "75e529e20e904cb5005a138c38df63478eb81d7dd0256deb82c501435c6bc1a7",
+      "attribution": "Artillery Passage by David Fletcher, CC BY 4.0",
+      "sourceUrl": "https://superspl.at/scene/f4897475",
+      "changes": "Decoded source, removed invalid entries, merge-decimated with source harmonics, then reduced harmonic bands and recompressed. Original PLY information is not recovered from SOG."
+    },
+    {
+      "name": "detail",
+      "source": "public/scene/lod-meta.json",
+      "sourceIsLossy": true,
+      "sourceManifestSha256": "11cecf43c7ab179fc4878a6720d1f01223f469d05760e4459d32344d402be656",
+      "tool": "@playcanvas/splat-transform@3.10.3",
+      "commands": [
+        [
+          "--no-tty",
+          "public/scene/lod-meta.json",
+          "--filter-nan",
+          "--decimate",
+          "2000000",
+          ".performance\\scene-work\\detail-2000000-source-sh.ply"
+        ],
+        [
+          "--no-tty",
+          "--gpu",
+          "1",
+          ".performance\\scene-work\\detail-2000000-source-sh.ply",
+          "--filter-harmonics",
+          "1",
+          ".performance\\scene-work\\detail-v1.sog"
+        ]
+      ],
+      "reusedIntermediate": null,
+      "gaussians": 2000000,
+      "harmonics": 1,
+      "output": ".performance\\scene-work\\detail-v1.sog",
+      "bytes": 28258740,
+      "sha256": "4e2d65a943f1093111378636f75c32040e5a1694e2f03e0e46bc349d0c9eab52",
+      "attribution": "Artillery Passage by David Fletcher, CC BY 4.0",
+      "sourceUrl": "https://superspl.at/scene/f4897475",
+      "changes": "Decoded source, removed invalid entries, merge-decimated with source harmonics, then reduced harmonic bands and recompressed. Original PLY information is not recovered from SOG."
+    },
+    {
+      "name": "mobile-directional",
+      "source": "public/scene/lod-meta.json",
+      "sourceIsLossy": true,
+      "sourceManifestSha256": "11cecf43c7ab179fc4878a6720d1f01223f469d05760e4459d32344d402be656",
+      "tool": "@playcanvas/splat-transform@3.10.3",
+      "commands": [
+        [
+          "--no-tty",
+          "public/scene/lod-meta.json",
+          "--filter-nan",
+          "--decimate",
+          "500000",
+          ".performance/scene-work/mobile-500000-source-sh.ply"
+        ],
+        [
+          "--no-tty",
+          "--gpu",
+          "1",
+          ".performance/scene-work/mobile-500000-source-sh.ply",
+          "--filter-harmonics",
+          "1",
+          ".performance\\scene-work\\mobile-directional-v1.sog"
+        ]
+      ],
+      "reusedIntermediate": {
+        "path": ".performance/scene-work/mobile-500000-source-sh.ply",
+        "sha256": "e884f0350ad05b2871672dd5a1370d4ddfeeaf91453c3b2874f3791e287dceca"
+      },
+      "gaussians": 500000,
+      "harmonics": 1,
+      "output": ".performance\\scene-work\\mobile-directional-v1.sog",
+      "bytes": 7571208,
+      "sha256": "0036c7d1272f29a209c2890213aeeb879de15b926db31c3b81db34c820544b81",
+      "attribution": "Artillery Passage by David Fletcher, CC BY 4.0",
+      "sourceUrl": "https://superspl.at/scene/f4897475",
+      "changes": "Decoded source, removed invalid entries, merge-decimated with source harmonics, then reduced harmonic bands and recompressed. Original PLY information is not recovered from SOG."
+    }
+  ]
+}

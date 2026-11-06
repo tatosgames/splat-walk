@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-11-06T03:55:39Z",
+  "method": "Windows Win32_VideoController via Get-CimInstance",
+  "primaryDisplay": {
+    "adapter": "Intel(R) UHD Graphics",
+    "width": 1920,
+    "height": 1080,
+    "refreshHz": 60
+  },
+  "secondaryAdapter": "NVIDIA GeForce GTX 1650 with Max-Q Design",
+  "note": "The browser's WebGPU adapter reports Intel gen-9, not a fallback adapter. Installed GPU inventory alone does not establish which adapter a rendering context uses. Power and battery conditions were not independently recorded."
+}

@@ -1,0 +1,13 @@
+#performance-panel { position:fixed; z-index:20; left:12px; top:12px; width:min(360px,calc(100vw - 24px)); max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); overflow:auto; color:#eee; background:#151515; border:1px solid #777; font:14px/1.5 system-ui,sans-serif; box-sizing:border-box; padding:12px; }
+#performance-panel summary { cursor:pointer; font-weight:600; min-height:24px; }
+#performance-panel p { margin:10px 0; }
+#performance-panel label { display:block; margin:8px 0; }
+#performance-panel input,#performance-panel select { display:block; width:100%; min-height:44px; padding:6px; box-sizing:border-box; background:#242424; color:#fff; border:1px solid #999; font:inherit; }
+#performance-panel input::placeholder { color:#bbb; }
+#performance-panel input,#performance-panel select { font-size:16px; }
+#performance-panel button { min-height:44px; padding:8px 12px; color:#111; background:#eee; border:1px solid #aaa; font:inherit; cursor:pointer; }
+#performance-panel button:disabled { color:#aaa; background:#333; cursor:default; }
+#performance-panel :focus-visible { outline:2px solid #8ad7ff; outline-offset:2px; }
+#performance-panel a { color:#8ad7ff; text-underline-offset:3px; }
+#performance-panel .perf-actions { display:flex; flex-wrap:wrap; gap:8px; }
+body.benchmark-capture #overlay,body.benchmark-capture #performance-panel,body.benchmark-capture #paused,body.benchmark-capture #hint,body.benchmark-capture #pausebtn,body.benchmark-capture #hud,body.benchmark-capture #view-controls,body.benchmark-capture #quality-status { visibility:hidden; }
