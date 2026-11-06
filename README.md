@@ -24,6 +24,8 @@ Node 24 was used for development. GitHub Pages builds and deploys `main` through
 ## Controls
 
 Press Play to start; the walk then repeats automatically without pause/resume controls.
+At the end of the passage the camera eases through a U-turn and retraces the same spline
+in the opposite direction; it turns back the same way at the entrance and keeps looping.
 Drag the picture with one finger or the mouse to look around. Three seconds after release,
 the viewing offset eases back to the route's center. A new gesture interrupts that return.
 A short tap reveals the Gaussians with a burn and restoration effect; dragging, cancelled

@@ -145,6 +145,8 @@ function resizeTarget() {
 // ---- the walk ----
 const walk = new Walk(ROUTE);
 console.log(`walk: ${walk.path.length.toFixed(1)} m, ${walk.duration.toFixed(1)} s`);
+const playbackDuration = walk.loopDuration;
+const samplePose = (t, position, rotation, gazeWeight) => walk.samplePlayback(t, position, rotation, gazeWeight);
 
 const pos = new pc.Vec3(), rot = new pc.Quat();
 const W = new pc.Mat4(), Wt = new pc.Mat4(), Winv = new pc.Mat4(), M = new pc.Mat4();
@@ -152,7 +154,7 @@ const pA = new pc.Vec3(), qA = new pc.Quat();
 const ONE = new pc.Vec3(1, 1, 1);
 
 function poseMatrix(t, out) {
-    walk.sample(t, pA, qA, look.gazeWeight);
+    samplePose(t, pA, qA, look.gazeWeight);
     look.apply(qA);
     return out.setTRS(pA, qA, ONE);
 }
@@ -168,7 +170,7 @@ function planeToCamera(nx, ny, nz, d, out) {
 
 function applyShot(t, exposure = true) {
     const H = 0.5 * (SHUTTER + READOUT);
-    walk.sample(t, pos, rot, look.gazeWeight);
+    samplePose(t, pos, rot, look.gazeWeight);
     look.apply(rot);
     camera.setPosition(pos);
     camera.setRotation(rot);
@@ -193,8 +195,7 @@ function applyShot(t, exposure = true) {
     planeToCamera(-1, 0, 0, -wl.a, film.wallL);  // face at world X = -a, facing -X
     planeToCamera(1, 0, 0, wl.b, film.wallR);    // face at world X = -b, facing +X
 
-    // the clip ends on a fade to black
-    film.look[3] = Math.min(1, Math.max(0, (walk.duration - t) / 1.4));
+    film.look[3] = 1;
 }
 
 // ---- dynamic resolution: hold the frame rate by trimming the splat render size ----
@@ -236,7 +237,7 @@ const scaler = {
 
 // ---- playback state ----
 let state = 'loading';     // loading | bench | ready | playing | paused | ended | free
-let tPlay = numeric(params, 't', 0, 0, walk.duration);   // shot time of the frame on screen
+let tPlay = numeric(params, 't', 0, 0, playbackDuration);   // continuous out-and-back playback time
 let clock = tPlay;                           // running clock while playing
 let lastIndex = -1;
 let frame = 0;
@@ -329,17 +330,16 @@ app.on('update', (dt) => {
     if (state === 'playing' && !starting) {
         if (audioClock && soundtrack.healthy) clock = Math.max(clock, soundtrack.time);
         else clock += Math.min(dt, 0.1) * rate;
-        clock = Math.min(walk.duration, clock);
         const index = Math.floor(clock * FPS + 1e-4);
         if (index !== lastIndex) {
             const skipped = lastIndex >= 0 ? Math.max(0, index - lastIndex - 1) : 0;
             lastIndex = index;
-            tPlay = index / FPS;
+            tPlay = (index / FPS) % playbackDuration;
             applyShot(tPlay);
             renderFrame();
             scaler.frame(skipped);
         }
-        if (clock >= walk.duration) end();
+        if (clock >= playbackDuration) end();
     } else if (state === 'bench') {
         bench.step(dt);
     } else if (state === 'free') {
@@ -511,7 +511,7 @@ app.assets.load(asset);
 // ---- controls ----
 function play() {
     if (state === 'loading' || state === 'bench') return;
-    if (state === 'ended' || tPlay >= walk.duration) { tPlay = 0; look.reset(true); }
+    if (state === 'ended' || tPlay >= playbackDuration) { tPlay = 0; look.reset(true); }
     clock = tPlay;
     lastIndex = -1;
     scaler.reset();
@@ -540,7 +540,7 @@ async function startSound() {
     await pending;
     if (generation !== soundGeneration || state !== 'playing') return;
     const current = () => generation === soundGeneration && state === 'playing';
-    const ok = await soundtrack.start(tPlay, walk.duration, current);
+    const ok = await soundtrack.start(tPlay, playbackDuration, current);
     if (!current()) return;
     audioClock = ok;
     clock = tPlay;

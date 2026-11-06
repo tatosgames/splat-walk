@@ -309,8 +309,16 @@ export class Soundtrack {
             this.sources.push(src);
         });
 
+        // Repeat location cues on the way back at the matching point in the route.
+        const routeEvents = [...this.scatter, ...PLACED.map(p => ({ ...p, len: this.buffers[p.name]?.duration ?? 0, offset: 0, fadeIn: 0.05, fadeOut: 0.3 }))]
+            .filter(e => e.t >= this.walk.loopStart && e.t <= this.walk.walkEnd)
+            .flatMap(e => [
+                { ...e, t: e.t - this.walk.loopStart },
+                { ...e, t: this.walk.loopLegDuration + this.walk.walkEnd - e.t, pan: -e.pan }
+            ]);
+        routeEvents.sort((a, b) => a.t - b.t);
         // faint distant sounds, rising out of the bed and sinking back
-        for (const e of [...this.scatter, ...PLACED.map(p => ({ ...p, len: this.buffers[p.name]?.duration ?? 0, offset: 0, fadeIn: 0.05, fadeOut: 0.3 }))]) {
+        for (const e of routeEvents) {
             const buf = this.buffers[e.name];
             if (!buf || e.t + e.len < t || e.t > duration) continue;
             const src = ctx.createBufferSource();
@@ -335,7 +343,13 @@ export class Soundtrack {
         let prev = -1;
         const rnd = prng(4242);
         const slices = this.stepSlices;
-        for (const f of this.footfalls) {
+        const routeFootfalls = this.footfalls
+            .filter(f => f.t >= this.walk.loopStart && f.t <= this.walk.walkEnd)
+            .flatMap(f => [
+                { ...f, t: f.t - this.walk.loopStart },
+                { ...f, t: this.walk.loopLegDuration + this.walk.walkEnd - f.t, foot: 1 - f.foot }
+            ]).sort((a, b) => a.t - b.t);
+        for (const f of routeFootfalls) {
             // draw everything first so the choices don't depend on the start point
             let k = Math.floor(rnd() * slices.length);
             if (k === prev) k = (k + 1) % slices.length;

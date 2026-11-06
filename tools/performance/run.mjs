@@ -215,7 +215,15 @@ try {
             await page.locator('#mute').click();
             assert(await page.locator('#mute').getAttribute('aria-pressed')==='false','Muted state failed');
             assert(await page.locator('#mute svg').count()===1,'Audio icon was replaced with text');
-            await page.evaluate(()=>window.__aw.seek(window.__aw.walk.duration-0.12));
+            const outAndBack=await page.evaluate(()=>{
+                const w=window.__aw.walk, p=window.__aw.app.root.findByName('camera').getPosition().clone();
+                const q=new (window.__aw.app.root.findByName('camera').getRotation().constructor)();
+                const t=w.loopLegDuration*1.5, mapped=w.playbackPose(t);
+                const returned=w.samplePlayback(t,p,q);
+                return {mapped,returned:{x:p.x,z:p.z,yaw:returned.yaw,facingOffset:returned.facingOffset},loopDuration:w.loopDuration};
+            });
+            assert(outAndBack.mapped.returning&&outAndBack.returned.facingOffset===180,'Return leg did not reverse the route heading');
+            await page.evaluate(()=>window.__aw.seek(window.__aw.walk.loopDuration-0.12));
             await page.waitForTimeout(800);
             const loop=await page.evaluate(()=>({state:window.__aw.state,time:window.__aw.t,overlayHidden:document.getElementById('overlay').inert}));
             assert(loop.state==='playing'&&loop.time<2&&loop.overlayHidden,'Walk did not loop automatically');
@@ -235,7 +243,7 @@ try {
                 await page.screenshot({path:path.join(output,`interface-${w}x${h}.png`)});
             }
             assert(!errors.length,errors.join(';'));
-            manifest.cases.push({name:'simplified-interface',valid:true,held,returning,loop,errors});
+            manifest.cases.push({name:'out-and-back-loop',valid:true,outAndBack,held,returning,loop,errors});
         } finally {await context.close();await save();}
     }
     // Smoke assertions: idle update callbacks must not turn into rendered samples.

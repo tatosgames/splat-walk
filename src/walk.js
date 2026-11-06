@@ -203,6 +203,13 @@ export class Walk {
         second.Vs = vs;
         this.duration = second.T[n - 1];
         this.walkEnd = second.tStop;
+        // Reuse the same arc-length path for an endless out-and-back. Skip the
+        // one-time idle intro on subsequent legs and turn the camera while the
+        // existing end-of-route braking brings the walker almost to a stop.
+        this.loopStart = cfg.idleStart;
+        this.loopLegDuration = this.walkEnd - this.loopStart;
+        this.loopDuration = this.loopLegDuration * 2;
+        this.turnDuration = 1.4;
         this._simulateGaze();
     }
 
@@ -377,7 +384,7 @@ export class Walk {
      * @param {Quat} rot - receives the rotation
      * @returns {object} debug values
      */
-    sample(t, pos, rot, gazeWeight = 1) {
+    sample(t, pos, rot, gazeWeight = 1, facingOffset = 0) {
         const cfg = this.cfg;
         const N = this.noise;
         const { s, v, ph } = this._lookup(t);
@@ -437,7 +444,8 @@ export class Walk {
         const tilt = clamp((gz.yaw - gz.base) * 0.03, -1.8, 1.8);
         const dip = Math.min(1.2, Math.abs(gz.yawVel) * 0.01);
 
-        const Yd = gz.base + (gz.yaw - gz.base) * gazeWeight + gy + ny;
+        const baseYaw = gz.base + facingOffset;
+        const Yd = baseYaw + (gz.yaw - gz.base) * gazeWeight + gy + ny;
         const Pd = gz.pitch * gazeWeight + gp + np - jolt - dip;
         const Rd = gr + nr + lean + tilt;
         qYaw.setFromAxisAngle(Vec3.UP, Yd);
@@ -445,7 +453,31 @@ export class Walk {
         qRoll.setFromAxisAngle(Vec3.BACK, Rd);
         rot.copy(qYaw).mul(qPitch).mul(qRoll);
 
-        return { s, v, phi, yaw: Yd, pitch: Pd, roll: Rd, gazeYaw: gz.yaw, gazePitch: gz.pitch };
+        return { s, v, phi, yaw: Yd, pitch: Pd, roll: Rd, gazeYaw: gz.yaw, gazePitch: gz.pitch, facingOffset };
+    }
+
+    /** Map continuous playback time onto the same path in alternating directions. */
+    playbackPose(t) {
+        let u = ((t % this.loopDuration) + this.loopDuration) % this.loopDuration;
+        if (Math.abs(u - this.loopLegDuration) < 1e-9) u = this.loopLegDuration;
+        else if (u < 1e-9 || this.loopDuration - u < 1e-9) u = 0;
+        if (u < this.loopLegDuration) return { time: this.loopStart + u, facingOffset: 0, returning: false };
+
+        const back = u - this.loopLegDuration;
+        // Ease the 180-degree turn while braking at the end, and finish it while
+        // braking at the starting point. This keeps the loop boundary continuous.
+        const turnIn = smooth(clamp(back / this.turnDuration, 0, 1));
+        const turnOut = smooth(clamp((this.loopLegDuration - back) / this.turnDuration, 0, 1));
+        return {
+            time: this.walkEnd - back,
+            facingOffset: 180 * Math.min(turnIn, turnOut),
+            returning: true
+        };
+    }
+
+    samplePlayback(t, pos, rot, gazeWeight = 1) {
+        const pose = this.playbackPose(t);
+        return this.sample(pose.time, pos, rot, gazeWeight, pose.facingOffset);
     }
 
     /**
@@ -471,7 +503,8 @@ export class Walk {
 
     // the walker's world z at time t
     zAt(t) {
-        return pathAt(this.path, this._lookup(t).s, [0, 0])[1];
+        const time = this.playbackPose(t).time;
+        return pathAt(this.path, this._lookup(time).s, [0, 0])[1];
     }
 
     // the walker's ground position along the path, for the depth proxy

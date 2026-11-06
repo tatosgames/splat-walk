@@ -49,7 +49,7 @@ try {
     // Exercise production audio paths after the visual-only first frame.
     await page.locator('#mute').click(); await page.evaluate(()=>window.__aw.play());
     await page.waitForFunction(() => window.__aw.soundtrack.ready && window.__aw.soundtrack.healthy, null, {timeout:60000});
-    await page.evaluate(()=>window.__aw.seek(window.__aw.walk.duration-0.12));
+    await page.evaluate(()=>window.__aw.seek(window.__aw.walk.loopDuration-0.12));
     await page.waitForTimeout(800);
     result.loop = await page.evaluate(()=>({state:window.__aw.state,time:window.__aw.t,audioHealthy:window.__aw.soundtrack.healthy}));
     if (result.loop.state!=='playing'||result.loop.time>=2||!result.loop.audioHealthy) throw new Error('Published audio/video did not loop');
