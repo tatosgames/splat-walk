@@ -11,7 +11,7 @@ npm run perf:baseline -- --suite=all --output=.performance/baseline-original
 node tools/performance/report.mjs .performance/baseline-original docs/performance/baseline.md
 ```
 
-Suite disponibili: `matrix`, `release`, `diagnostic`, `loading`, `burn`, `thermal`, `captures`, `smoke`, `interaction`, `qa` e `all`. `interaction` prova mouse e touch CDP; `qa` verifica sei viewport, limiti camera, audio, replay e retry della scena. La prova termica include cambi di orientamento della camera e burn ogni dieci secondi. `--repeats=3` è il default per matrice e diagnostica. Una suite completa richiede decine di minuti. Tenere Chrome visibile e il computer alimentato; non cambiare GPU o refresh durante il confronto.
+Suite disponibili: `matrix`, `release`, `diagnostic`, `loading`, `burn`, `thermal`, `captures`, `smoke`, `interaction`, `qa` e `all`. `interaction` prova mouse e touch CDP; `qa` e `interface` verificano quattro viewport, ricentramento automatico dopo tre secondi, audio a icona e riproduzione continua in loop. La prova termica include cambi di orientamento della camera e burn ogni dieci secondi. `--repeats=3` è il default per matrice e diagnostica. Una suite completa richiede decine di minuti. Tenere Chrome visibile e il computer alimentato; non cambiare GPU o refresh durante il confronto.
 
 I campioni sono conservati nei JSON, con hash degli asset e delle sorgenti nel manifest. `postrender` identifica i rendering; `frameend` serve solo a leggere le statistiche dopo il frame. Le query GPU possono arrivare in ritardo: i tempi GPU non sono attribuiti artificialmente al campione CPU contemporaneo. Valori assenti restano null. Per confermare un collo di bottiglia, confrontare gli stessi tratti a risoluzione e campionamento fissi.
 

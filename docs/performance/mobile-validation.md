@@ -15,11 +15,11 @@ Aprire [la pagina di benchmark](https://tatosgames.github.io/splat-walk/benchmar
 2. Selezionare 50 fps e backend automatico nella pagina benchmark. Applicare e ricaricare; scegliere Passeggiata per tre ripetizioni. Mantenere la pagina visibile.
 3. Esportare il JSON, ruotare il telefono e ripetere. Registrare il backend realmente usato: WebGPU può non essere disponibile.
 4. Eseguire lo scenario Burn e ripristino, poi la sessione di cinque minuti. Annotare surriscaldamento, crash e peggioramento visibile.
-5. Nella demo principale verificare drag e tap separatamente, due dita, annullamento del gesto, ricentra, pausa durante il drag e rotazione del telefono. Controllare notch, barre del browser, pulsanti e crediti.
+5. Nella demo principale verificare drag e tap separatamente, due dita, annullamento del gesto, ritorno automatico al centro dopo tre secondi e rotazione del telefono. Controllare notch, barre del browser, pulsanti e crediti.
 6. Per cache fredda usare gli strumenti del browser quando disponibili; non chiamare una misura cold soltanto perché si è ricaricata la pagina. Le limitazioni vanno annotate.
 
 ## Criteri
 
 Il target corrente di 50 fps richiede misure coerenti per l'intera passeggiata e l'interazione, non una media favorevole di pochi secondi. Confrontare p95/p99, tick persi, dimensioni effettive e backend. GPU timing mancante resta non disponibile; una viewport mobile emulata sul PC non sostituisce questa tabella.
 
-Se il profilo Auto mostra 30 fps per limite del dispositivo, la demo resta utilizzabile ma il requisito 50 fps su quel telefono non è superato. Eventuali artefatti introdotti dalla riduzione delle Gaussiane vanno descritti per posa e angolo di visuale, oltre alla velocità.
+Se il benchmark registra il fallback Auto a 30 fps, la demo resta utilizzabile ma il requisito 50 fps su quel telefono non è superato. Eventuali artefatti introdotti dalla riduzione delle Gaussiane vanno descritti per posa e angolo di visuale, oltre alla velocità.

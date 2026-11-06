@@ -23,15 +23,20 @@ Node 24 was used for development. GitHub Pages builds and deploys `main` through
 
 ## Controls
 
-Press Play to start. Drag the picture with one finger or the mouse to look around;
-a short tap reveals the Gaussians with a burn and restoration effect. Dragging, cancelled
-gestures and multitouch do not trigger a burn. Camera rotation works while paused.
-Recenter restores the route's original viewing direction.
+Press Play to start; the walk then repeats automatically without pause/resume controls.
+Drag the picture with one finger or the mouse to look around. Three seconds after release,
+the viewing offset eases back to the route's center. A new gesture interrupts that return.
+A short tap reveals the Gaussians with a burn and restoration effect; dragging, cancelled
+gestures and multitouch do not trigger a burn.
 
-Space pauses/resumes, R restarts, M toggles sound and F requests fullscreen where supported.
+The speaker icon toggles sound and exposes its state to assistive technology. M also toggles
+sound; F requests fullscreen where supported. Playback suspends while the page is hidden
+and continues automatically when it becomes visible. No FPS/device-limit badge appears.
+The initial Play gesture is retained to enable browser audio.
+
 Touch controls remain visible. Portrait uses the actual viewport and preserves the vertical
 field of view; wide touch landscape preserves the horizontal composition. Desktop retains
-the original 16:9 presentation. Rotation changes orientation only, never the walk's position.
+16:9 presentation. Rotation changes orientation only, never the walk's position.
 Yaw is limited to ±60 degrees and pitch to ±30 degrees.
 
 ## Quality and download size
@@ -48,7 +53,7 @@ The output has both pixel and DPR caps, and the scene target has dynamic resolut
 Performance shares one RGB ray per temporal sample, omitting lateral chromatic aberration;
 Balanced and Original retain separate colour rays. All profiles retain the film treatment.
 
-The current rendering target is 50 fps, accepted for this version. Auto visibly falls back to 30 fps after sustained overload
+The current rendering target is 50 fps, accepted for this version. Auto falls back to 30 fps after sustained overload
 at minimum scene resolution. A target or average is not a guarantee of a stable frame rate.
 The compact scan loses fine sign lettering and close wall detail. Use Balanced or Original
 for comparison. Real Android and iPhone validation remains pending; PC viewport emulation
@@ -56,7 +61,7 @@ cannot certify mobile GPU performance. See [measurements](docs/performance/READM
 
 Audio loads after a playback gesture and joins at the current walk time. Muted playback does
 not download audio. Optional sound failures do not block the visual experience. Backgrounding
-the page pauses playback. Scene failures expose a retry control.
+the page suspends playback, with automatic continuation on return. Scene failures expose a retry control.
 
 ## Asset pipeline
 

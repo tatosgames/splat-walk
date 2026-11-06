@@ -28,7 +28,6 @@ const stage = document.getElementById('stage');
 const overlay = document.getElementById('overlay');
 const hud = document.getElementById('hud');
 const hint = document.getElementById('hint');
-const pauseBtn = document.getElementById('pausebtn');
 const bar = overlay.querySelector('.bar');
 const status = overlay.querySelector('.status');
 
@@ -230,7 +229,6 @@ const scaler = {
         else this.overloaded = 0;
         if (this.overloaded >= 4) {
             FPS = 30; lastIndex = -1;
-            document.getElementById('quality-status').textContent = '30 fps · device limit';
         }
         this.drops = 0;
     }
@@ -523,7 +521,6 @@ function play() {
     overlay.inert = true;
     document.body.classList.add('playing');
     document.body.classList.remove('paused');
-    pauseBtn.setAttribute('aria-label', 'Pause');
     startSound();
     // the first time through, say once that the picture can be touched
     if (!hintShown) {
@@ -556,22 +553,16 @@ function pause() {
     audioClock = false;
     document.body.classList.remove('playing');
     document.body.classList.add('paused');
-    pauseBtn.setAttribute('aria-label', 'Play');
     app.renderNextFrame = true;
 }
 function end() {
-    state = 'ended';
     soundGeneration++;
     soundtrack.stop();
     audioClock = false;
-    document.body.classList.remove('playing');
-    setTimeout(() => {
-        if (state !== 'ended') return;
-        overlay.classList.remove('hidden');
-        overlay.inert = false;
-        stage.inert = true;
-        overlay.querySelector('#play').setAttribute('aria-label', 'Replay');
-    }, 500);
+    if (probe) { state = 'ended'; return; } // A measured walk still has a finite boundary.
+    clock = 0; tPlay = 0; lastIndex = -1;
+    clearBurn();
+    startSound();
 }
 function restart() {
     look.reset(true);
@@ -585,9 +576,8 @@ window.addEventListener('keydown', (e) => {
     if (e.target.closest?.('button, select, input, textarea, a')) return;
     if (e.code === 'Space') {
         e.preventDefault();
-        if (state === 'playing') pause();
-        else if (state === 'paused' || state === 'ready' || state === 'ended') play();
-    } else if (e.code === 'KeyR' && state !== 'loading' && state !== 'bench') {
+        if (state === 'ready') play();
+    } else if (DEBUG && e.code === 'KeyR' && state !== 'loading' && state !== 'bench') {
         restart();
     } else if (e.code === 'KeyF') {
         if (document.fullscreenElement) document.exitFullscreen();
@@ -602,22 +592,24 @@ window.addEventListener('keydown', (e) => {
         }
     }
 });
-// tapping the picture burns it; the corner button (or Space) pauses
 // CameraLook handles tap versus drag and pointer cancellation.
-pauseBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (state === 'playing') pause(); else if (state === 'paused') play();
-});
 // show the controls (and the cursor) while the pointer moves, like a video player
 let controlsTimer = 0;
 window.addEventListener('pointermove', showControls);
-document.getElementById('recenter').addEventListener('click', () => { look.reset(); showControls(); app.renderNextFrame = true; });
 function toggleMute() {
     soundtrack.setMuted(!soundtrack.muted);
-    document.getElementById('mute').textContent = soundtrack.muted ? 'Sound on' : 'Mute';
+    updateAudioControl();
     if (!soundtrack.muted && state === 'playing' && !soundtrack.healthy) startSound();
 }
-document.getElementById('mute').textContent = soundtrack.muted ? 'Sound on' : 'Mute';
+function updateAudioControl() {
+    const button = document.getElementById('mute');
+    const label = soundtrack.muted ? 'Turn sound on' : 'Mute sound';
+    button.dataset.muted = String(soundtrack.muted);
+    button.setAttribute('aria-pressed', String(!soundtrack.muted));
+    button.setAttribute('aria-label', 'Sound');
+    button.title = label;
+}
+updateAudioControl();
 document.getElementById('mute').addEventListener('click', toggleMute);
 const profileSelect = document.getElementById('quality');
 profileSelect.value = config.auto ? 'auto' : config.profile;
@@ -627,7 +619,11 @@ profileSelect.addEventListener('change', () => {
     location.search = query.toString();
 });
 document.getElementById('retry').addEventListener('click', () => location.reload());
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+let resumeOnVisible = false;
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (state === 'playing') { resumeOnVisible = true; pause(); } }
+    else if (resumeOnVisible) { resumeOnVisible = false; play(); }
+});
 
 // dev handle
 window.__aw = {

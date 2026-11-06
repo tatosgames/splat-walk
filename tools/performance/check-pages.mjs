@@ -18,25 +18,42 @@ try {
     const initialStarted = performance.now();
     await page.goto(new URL('?mute', base).href, {waitUntil:'domcontentloaded'});
     await page.waitForFunction(() => window.__aw?.state === 'ready', null, {timeout:60000});
+    if (await page.locator('#pausebtn,#recenter,#quality-status,#paused').count()) throw new Error('Removed UI controls remain published');
     result.initialDemoReadyMs = performance.now() - initialStarted;
     await page.locator('#play').click(); await page.waitForTimeout(1000);
-    await page.locator('#pausebtn').click();
+    await page.evaluate(()=>window.__aw.pause());
     await page.mouse.move(195,400); await page.mouse.down();
     await page.mouse.move(270,440,{steps:10}); await page.mouse.up(); await page.waitForTimeout(600);
     result.runtime = await page.evaluate(() => ({
-        state:window.__aw.state, profile:window.__aw.config.profile,
+        state:window.__aw.state, profile:window.__aw.config.profile, targetFps:window.__aw.config.fps,
         canvas:[window.__aw.device.width,window.__aw.device.height], backend:window.__aw.device.deviceType,
         yaw:window.__aw.cameraLook.yaw, burn:window.__aw.burn.active
     }));
-    if (result.runtime.profile !== 'performance' || result.runtime.canvas[1] <= result.runtime.canvas[0] ||
+    if (result.runtime.targetFps !== 50 || result.runtime.profile !== 'performance' || result.runtime.canvas[1] <= result.runtime.canvas[0] ||
         Math.abs(result.runtime.yaw) < 5 || result.runtime.burn) throw new Error('Published app failed portrait/drag verification');
     await page.screenshot({path:path.join(output,'pages-portrait.png')});
     await page.setViewportSize({width:844,height:390}); await page.waitForTimeout(300);
     await page.screenshot({path:path.join(output,'pages-landscape.png')});
+    await page.evaluate(() => {
+        window.__pagesFrames=0;
+        window.__pagesFrameObserver=()=>window.__pagesFrames++;
+        window.__aw.app.on('postrender',window.__pagesFrameObserver);
+    });
+    await page.locator('#canvas').click({position:{x:400,y:150}});
+    const beforeBurn=await page.evaluate(()=>({frames:window.__pagesFrames,at:performance.now()}));
+    await page.waitForTimeout(1200);
+    const afterBurn=await page.evaluate(()=>({frames:window.__pagesFrames,at:performance.now()}));
+    result.pausedBurnFps=(afterBurn.frames-beforeBurn.frames)*1000/(afterBurn.at-beforeBurn.at);
+    await page.evaluate(()=>window.__aw.app.off('postrender',window.__pagesFrameObserver));
+    if (result.pausedBurnFps < 37.5) throw new Error('Published paused burn has half-rate cadence');
     // Exercise production audio paths after the visual-only first frame.
-    await page.locator('#mute').click(); await page.locator('#pausebtn').click();
+    await page.locator('#mute').click(); await page.evaluate(()=>window.__aw.play());
     await page.waitForFunction(() => window.__aw.soundtrack.ready && window.__aw.soundtrack.healthy, null, {timeout:60000});
-    await page.locator('#pausebtn').click();
+    await page.evaluate(()=>window.__aw.seek(window.__aw.walk.duration-0.12));
+    await page.waitForTimeout(800);
+    result.loop = await page.evaluate(()=>({state:window.__aw.state,time:window.__aw.t,audioHealthy:window.__aw.soundtrack.healthy}));
+    if (result.loop.state!=='playing'||result.loop.time>=2||!result.loop.audioHealthy) throw new Error('Published audio/video did not loop');
+    await page.evaluate(()=>window.__aw.pause());
     result.audioReady = await page.evaluate(() => window.__aw.soundtrack.ready);
     result.withAudio = await page.evaluate(() => {
         const resources = performance.getEntriesByType('resource').map(r => ({url:r.name,transferBytes:r.transferSize,encodedBytes:r.encodedBodySize}));

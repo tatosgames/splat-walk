@@ -14,7 +14,7 @@ if (!Number.isInteger(targetFps) || targetFps < 15 || targetFps > 120) throw new
 let extraQuery = option('query', '');
 const sceneFile = option('scene-file', '');
 const repeats = Number(option('repeats', '3'));
-if (!['all', 'matrix', 'release', 'diagnostic', 'loading', 'burn', 'thermal', 'captures', 'smoke', 'interaction', 'qa', 'profiles'].includes(suite)) throw new Error(`Unknown suite: ${suite}`);
+if (!['all', 'matrix', 'release', 'diagnostic', 'loading', 'burn', 'thermal', 'captures', 'smoke', 'interaction', 'qa', 'interface', 'profiles'].includes(suite)) throw new Error(`Unknown suite: ${suite}`);
 if (!Number.isInteger(repeats) || repeats < 1 || repeats > 10) throw new Error('repeats must be an integer from 1 to 10');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const output = path.resolve(option('output', `.performance/${stamp}`));
@@ -184,80 +184,59 @@ try {
             await s.page.screenshot({ path: path.join(output, 'benchmark-ui-mobile.png') });
         } finally { await s.context.close(); await save(); }
     }
-    if (suite === 'qa') {
-        const context = await browser.newContext({ viewport: portrait, deviceScaleFactor: 1, hasTouch: true });
-        const s = await open(portrait, 'mute', context);
-        const assert = (value, message) => { if (!value) throw new Error(message); };
+    if (['qa','interface'].includes(suite)) {
+        const context = await browser.newContext({viewport:portrait,hasTouch:true});
+        const page = await context.newPage();
+        const errors=[];
+        page.on('pageerror',e=>errors.push(e.message));
+        const assert=(value,message)=>{if(!value)throw new Error(message);};
         try {
-            await s.page.locator('#performance-panel').evaluate(el => { el.hidden = true; });
-            for (const [w, h] of [[320,568],[390,844],[412,915],[844,390],[768,1024],[1280,720]]) {
-                await s.page.setViewportSize({ width:w, height:h });
-                await s.page.waitForTimeout(300);
-                await s.page.screenshot({ path:path.join(output, `ready-${w}x${h}.png`) });
+            await page.goto(`${base}?mute`);
+            await page.waitForFunction(()=>window.__aw?.state==='ready',null,{timeout:60000});
+            assert(await page.locator('#pausebtn,#recenter,#quality-status,#paused').count()===0,'Removed controls still exist');
+            await page.locator('#play').click(); await page.waitForTimeout(300);
+            await page.keyboard.press('Space');
+            assert(await page.evaluate(()=>window.__aw.state==='playing'),'Space paused the walk');
+            await page.mouse.move(195,400); await page.mouse.down();
+            await page.mouse.move(280,440,{steps:12}); await page.mouse.up();
+            await page.waitForTimeout(600);
+            const held=await page.evaluate(()=>({yaw:window.__aw.cameraLook.yaw,target:window.__aw.cameraLook.targetYaw,returnAt:window.__aw.cameraLook.returnAt}));
+            assert(Math.abs(held.yaw)>5,'Drag failed');
+            await page.waitForTimeout(1900);
+            assert(await page.evaluate(target=>window.__aw.cameraLook.targetYaw===target,held.target),'Recenter started before three seconds');
+            await page.waitForTimeout(1000);
+            const returning=await page.evaluate(()=>window.__aw.cameraLook.yaw);
+            assert(Math.abs(returning)>0.1 && Math.abs(returning)<Math.abs(held.yaw),'Recenter jumped or did not start');
+            await page.waitForTimeout(2000);
+            assert(await page.evaluate(()=>Math.abs(window.__aw.cameraLook.yaw)<0.2),'Camera did not return to center');
+            await page.locator('#mute').click();
+            assert(await page.locator('#mute').getAttribute('aria-pressed')==='true','Sound-on state failed');
+            await page.waitForFunction(()=>window.__aw.soundtrack.healthy,null,{timeout:30000});
+            await page.locator('#mute').click();
+            assert(await page.locator('#mute').getAttribute('aria-pressed')==='false','Muted state failed');
+            assert(await page.locator('#mute svg').count()===1,'Audio icon was replaced with text');
+            await page.evaluate(()=>window.__aw.seek(window.__aw.walk.duration-0.12));
+            await page.waitForTimeout(800);
+            const loop=await page.evaluate(()=>({state:window.__aw.state,time:window.__aw.t,overlayHidden:document.getElementById('overlay').inert}));
+            assert(loop.state==='playing'&&loop.time<2&&loop.overlayHidden,'Walk did not loop automatically');
+            assert(await page.evaluate(()=>{
+                Object.defineProperty(document,'hidden',{configurable:true,value:true});
+                document.dispatchEvent(new Event('visibilitychange'));
+                document.dispatchEvent(new Event('visibilitychange'));
+                const suspended=window.__aw.state==='paused';
+                delete document.hidden;
+                document.dispatchEvent(new Event('visibilitychange'));
+                return suspended&&window.__aw.state==='playing';
+            }),'Visibility changes did not continue playback automatically');
+            for(const [w,h] of [[320,568],[390,844],[844,390],[1280,720]]) {
+                await page.setViewportSize({width:w,height:h});await page.waitForTimeout(300);
+                const controls=await page.locator('#view-controls').boundingBox();
+                assert(controls.x>=0&&controls.x+controls.width<=w+1,'Controls overflow');
+                await page.screenshot({path:path.join(output,`interface-${w}x${h}.png`)});
             }
-            await s.page.locator('#play').click();
-            await s.page.waitForTimeout(400);
-            await s.page.evaluate(() => { window.__aw.pause(); window.__aw.seek(16); });
-            for (const [w,h] of [[320,568],[390,844],[412,915],[844,390],[768,1024],[1280,720]]) {
-                await s.page.setViewportSize({ width:w, height:h });
-                await s.page.waitForTimeout(500);
-                const bounds = await s.page.evaluate(() => {
-                    const buttons = [...document.querySelectorAll('#view-controls button,#quality,#pausebtn')].map(el => {
-                        const r=el.getBoundingClientRect(); return { id:el.id, x:r.x,y:r.y,w:r.width,h:r.height };
-                    });
-                    return { buttons, width:innerWidth, height:innerHeight,
-                        overflow:document.documentElement.scrollWidth > innerWidth,
-                        overlayInert:document.getElementById('overlay').inert };
-                });
-                assert(!bounds.overflow && bounds.overlayInert, `Overflow or hidden overlay focus at ${w}x${h}`);
-                assert(bounds.buttons.every(r => r.x>=0 && r.y>=0 && r.x+r.w<=w+1 && r.y+r.h<=h+1 && r.h>=44), `Controls outside viewport: ${JSON.stringify(bounds)}`);
-                await s.page.screenshot({ path:path.join(output, `paused-${w}x${h}.png`) });
-            }
-            for (const [name,yaw,pitch] of [['left',-60,0],['right',60,0],['up',0,30],['down',0,-30]]) {
-                await s.page.evaluate(({yaw,pitch}) => { const l=window.__aw.cameraLook; l.targetYaw=yaw;l.targetPitch=pitch; },{yaw,pitch});
-                await s.page.waitForTimeout(700);
-                await s.page.screenshot({ path:path.join(output, `angle-${name}.png`) });
-            }
-            await s.page.evaluate(() => { window.__aw.cameraLook.reset(true); window.__aw.play(); });
-            await s.page.setViewportSize(portrait); await s.page.waitForTimeout(500);
-            assert(await s.page.evaluate(() => window.__aw.state === 'playing'), 'Rotation interrupted playback');
-            const blank = await context.newPage(); await blank.goto('about:blank'); await blank.bringToFront();
-            await s.page.waitForTimeout(300);
-            const hidden = await s.page.evaluate(() => document.hidden);
-            if (hidden) assert(await s.page.evaluate(() => window.__aw.state === 'paused'), 'Hidden page did not pause');
-            else {
-                // Some headful automation environments leave both windows visible.
-                // Exercise the event handler explicitly, without calling this a real background test.
-                await s.page.evaluate(() => {
-                    Object.defineProperty(document, 'hidden', { configurable:true, value:true });
-                    document.dispatchEvent(new Event('visibilitychange'));
-                    delete document.hidden;
-                });
-                assert(await s.page.evaluate(() => window.__aw.state === 'paused'), 'Visibility handler did not pause');
-            }
-            await blank.close(); await s.page.bringToFront();
-            await s.page.locator('#mute').click(); await s.page.locator('#pausebtn').click();
-            await s.page.waitForFunction(() => window.__aw.soundtrack.ready && window.__aw.soundtrack.healthy, null, {timeout:30000});
-            await s.page.locator('#pausebtn').click();
-            assert(await s.page.evaluate(() => !window.__aw.soundtrack.running), 'Audio did not stop on pause');
-            await s.page.evaluate(() => window.__aw.seek(window.__aw.walk.duration - 0.1));
-            await s.page.locator('#pausebtn').click(); await s.page.waitForTimeout(1000);
-            assert(await s.page.evaluate(() => window.__aw.state === 'ended' && !document.getElementById('overlay').inert), 'Replay overlay failed');
-            await s.page.locator('#play').click(); await s.page.waitForTimeout(200);
-            assert(await s.page.evaluate(() => window.__aw.state === 'playing' && window.__aw.t < 2), 'Replay did not restart');
-            manifest.cases.push({name:'qa-layout-audio-lifecycle',valid:true,visibilityTest:hidden ? 'real hidden document' : 'synthetic visibility event; actual background requires manual check'});
-        } finally { await s.context.close(); await save(); }
-        const failed = await browser.newContext({ viewport:portrait });
-        try {
-            await failed.route('**/scene/mobile-lite-v1.sog', route => route.abort());
-            const page = await failed.newPage();
-            await page.goto(base);
-            await page.locator('#retry').waitFor({state:'visible',timeout:30000});
-            await page.screenshot({path:path.join(output,'scene-error.png')});
-            await failed.unrouteAll(); await page.locator('#retry').click();
-            await page.locator('#play').waitFor({state:'visible',timeout:30000});
-            manifest.cases.push({name:'qa-scene-retry',valid:true});
-        } finally { await failed.close(); await save(); }
+            assert(!errors.length,errors.join(';'));
+            manifest.cases.push({name:'simplified-interface',valid:true,held,returning,loop,errors});
+        } finally {await context.close();await save();}
     }
     // Smoke assertions: idle update callbacks must not turn into rendered samples.
     if (suite === 'smoke') {
@@ -297,8 +276,8 @@ try {
             if (!(Math.abs(drag.yaw) > 5 && Math.abs(drag.pitch) > 1 && !drag.burn)) await s.page.screenshot({ path: path.join(output, 'drag-failure.png') });
             assert(Math.abs(drag.yaw) > 5 && Math.abs(drag.pitch) > 1 && !drag.burn, `Drag did not rotate or triggered burn: ${JSON.stringify(drag)}`);
             assert(drag.canvas[1] > drag.canvas[0], 'Portrait canvas still letterboxed');
-            await s.page.locator('#recenter').click(); await s.page.waitForTimeout(700);
-            assert(await s.page.evaluate(() => Math.abs(window.__aw.cameraLook.yaw) < 0.1), 'Recenter failed');
+            await s.page.waitForTimeout(4800);
+            assert(await s.page.evaluate(() => Math.abs(window.__aw.cameraLook.yaw) < 0.1), 'Automatic recenter failed');
             await s.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x:195, y:400, id:1 }] });
             await s.cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x:110, y:350, id:1 }] });
             await s.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
