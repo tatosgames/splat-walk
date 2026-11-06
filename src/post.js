@@ -57,8 +57,8 @@ const glslFS = /* glsl */ `
     vec3 originAt(float f) {
         return f < 0.0 ? -f * uM0[3].xyz : f * uM2[3].xyz;
     }
-    vec3 dirAt(vec3 d, float f) {
-        return f < 0.0 ? d - f * ((uM0 * vec4(d, 0.0)).xyz - d) : d + f * ((uM2 * vec4(d, 0.0)).xyz - d);
+    vec3 dirAt(vec3 d, vec3 d0, vec3 d2, float f) {
+        return f < 0.0 ? d - f * d0 : d + f * d2;
     }
     float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
     // above 0.9 the values ease towards 1; very bright colours also drift towards white, as an
@@ -79,18 +79,22 @@ const glslFS = /* glsl */ `
         vec3 dR = vec3(q * (1.0 + (uLens.x + uLens.y) * r2), -1.0);
         vec3 dG = vec3(q * (1.0 + uLens.x * r2), -1.0);
         vec3 dB = vec3(q * (1.0 + (uLens.x - uLens.y) * r2), -1.0);
+        vec3 dR0 = (uM0 * vec4(dR, 0.0)).xyz - dR;
+        vec3 dR2 = (uM2 * vec4(dR, 0.0)).xyz - dR;
+        vec3 dG0 = (uM0 * vec4(dG, 0.0)).xyz - dG;
+        vec3 dG2 = (uM2 * vec4(dG, 0.0)).xyz - dG;
+        vec3 dB0 = (uM0 * vec4(dB, 0.0)).xyz - dB;
+        vec3 dB2 = (uM2 * vec4(dB, 0.0)).xyz - dB;
 
         float rowF = (0.5 - n.y * 0.5 - 0.5) * uTiming.x;
         float jitter = hash12(gl_FragCoord.xy + fract(uTiming.z * 0.6180339) * 113.0);
-        int taps = int(uTiming.w);
         vec3 acc = vec3(0.0);
         vec2 uvC = vec2(0.0);
-        for (int i = 0; i < 24; i++) {
-            if (i >= taps) break;
-            float s = (float(i) + jitter) / float(taps) - 0.5;
+        for (int i = 0; i < __FILM_TAPS__; i++) {
+            float s = (float(i) + jitter) / float(__FILM_TAPS__) - 0.5;
             float f = clamp(rowF + s * uTiming.y, -1.0, 1.0);
             vec3 o = originAt(f);
-            vec3 vG = dirAt(dG, f);
+            vec3 vG = dirAt(dG, dG0, dG2, f);
             float t = 120.0;
             t = hitPlane(uFloor, o, vG, t);
             t = hitPlane(uWallL, o, vG, t);
@@ -100,16 +104,16 @@ const glslFS = /* glsl */ `
             if (uLens.y == 0.0) {
                 acc += toLin(textureLod(sceneTex, uvG, 0.0).rgb);
             } else {
-                vec2 uvR = projectUv(o + dirAt(dR, f) * t);
-                vec2 uvB = projectUv(o + dirAt(dB, f) * t);
+                vec2 uvR = projectUv(o + dirAt(dR, dR0, dR2, f) * t);
+                vec2 uvB = projectUv(o + dirAt(dB, dB0, dB2, f) * t);
                 acc.r += toLin(textureLod(sceneTex, uvR, 0.0).rgb).r;
                 acc.g += toLin(textureLod(sceneTex, uvG, 0.0).rgb).g;
                 acc.b += toLin(textureLod(sceneTex, uvB, 0.0).rgb).b;
             }
             uvC += uvG;
         }
-        vec3 col = acc / float(taps);
-        uvC /= float(taps);
+        vec3 col = acc / float(__FILM_TAPS__);
+        uvC /= float(__FILM_TAPS__);
 
         // halation around bright sky and lamps
         vec3 g = toLin(textureLod(sceneTex, uvC, uGlow.z).rgb);
@@ -197,9 +201,9 @@ const wgslFS = /* wgsl */ `
         if (f < 0.0) { return -f * uniform.uM0[3].xyz; }
         return f * uniform.uM2[3].xyz;
     }
-    fn dirAt(d: vec3f, f: f32) -> vec3f {
-        if (f < 0.0) { return d - f * ((uniform.uM0 * vec4f(d, 0.0)).xyz - d); }
-        return d + f * ((uniform.uM2 * vec4f(d, 0.0)).xyz - d);
+    fn dirAt(d: vec3f, d0: vec3f, d2: vec3f, f: f32) -> vec3f {
+        if (f < 0.0) { return d - f * d0; }
+        return d + f * d2;
     }
     fn luma(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
     fn softClip(c: vec3f) -> vec3f {
@@ -220,19 +224,23 @@ const wgslFS = /* wgsl */ `
         let dR = vec3f(q * (1.0 + (lens.x + lens.y) * r2), -1.0);
         let dG = vec3f(q * (1.0 + lens.x * r2), -1.0);
         let dB = vec3f(q * (1.0 + (lens.x - lens.y) * r2), -1.0);
+        let dR0 = (uniform.uM0 * vec4f(dR, 0.0)).xyz - dR;
+        let dR2 = (uniform.uM2 * vec4f(dR, 0.0)).xyz - dR;
+        let dG0 = (uniform.uM0 * vec4f(dG, 0.0)).xyz - dG;
+        let dG2 = (uniform.uM2 * vec4f(dG, 0.0)).xyz - dG;
+        let dB0 = (uniform.uM0 * vec4f(dB, 0.0)).xyz - dB;
+        let dB2 = (uniform.uM2 * vec4f(dB, 0.0)).xyz - dB;
 
         let timing = uniform.uTiming;
         let rowF = (0.5 - n.y * 0.5 - 0.5) * timing.x;
         let jitter = hash12(pcPosition.xy + fract(timing.z * 0.6180339) * 113.0);
-        let taps = i32(timing.w);
         var acc = vec3f(0.0);
         var uvC = vec2f(0.0);
-        for (var i = 0; i < 24; i += 1) {
-            if (i >= taps) { break; }
-            let s = (f32(i) + jitter) / f32(taps) - 0.5;
+        for (var i = 0; i < __FILM_TAPS__; i += 1) {
+            let s = (f32(i) + jitter) / f32(__FILM_TAPS__) - 0.5;
             let f = clamp(rowF + s * timing.y, -1.0, 1.0);
             let o = originAt(f);
-            let vG = dirAt(dG, f);
+            let vG = dirAt(dG, dG0, dG2, f);
             var t = 120.0;
             t = hitPlane(uniform.uFloor, o, vG, t);
             t = hitPlane(uniform.uWallL, o, vG, t);
@@ -242,16 +250,16 @@ const wgslFS = /* wgsl */ `
             if (lens.y == 0.0) {
                 acc += toLin(tap(uvG, 0.0));
             } else {
-                let uvR = projectUv(o + dirAt(dR, f) * t);
-                let uvB = projectUv(o + dirAt(dB, f) * t);
+                let uvR = projectUv(o + dirAt(dR, dR0, dR2, f) * t);
+                let uvB = projectUv(o + dirAt(dB, dB0, dB2, f) * t);
                 acc.x += toLin(tap(uvR, 0.0)).x;
                 acc.y += toLin(tap(uvG, 0.0)).y;
                 acc.z += toLin(tap(uvB, 0.0)).z;
             }
             uvC += uvG;
         }
-        var col = acc / f32(taps);
-        uvC = uvC / f32(taps);
+        var col = acc / f32(__FILM_TAPS__);
+        uvC = uvC / f32(__FILM_TAPS__);
 
         let glow = uniform.uGlow;
         let g = toLin(tap(uvC, glow.z));
@@ -285,16 +293,18 @@ const wgslFS = /* wgsl */ `
 `;
 
 export class FilmPass extends RenderPassShaderQuad {
-    constructor(device, sourceTexture) {
+    constructor(device, sourceTexture, taps) {
+        if (!Number.isInteger(taps) || taps < 1 || taps > 24) throw new RangeError(`Unsupported film sample count: ${taps}`);
         super(device);
         this.sourceTexture = sourceTexture;
+        this.taps = taps;
         this.shader = ShaderUtils.createShader(device, {
             uniqueName: 'ArtilleryFilmPass',
             attributes: { aPosition: SEMANTIC_POSITION },
             vertexGLSL: glslVS,
-            fragmentGLSL: glslFS,
+            fragmentGLSL: glslFS.replaceAll('__FILM_TAPS__', String(taps)),
             vertexWGSL: wgslVS,
-            fragmentWGSL: wgslFS
+            fragmentWGSL: wgslFS.replaceAll('__FILM_TAPS__', String(taps))
         });
         const s = device.scope;
         this.ids = {};

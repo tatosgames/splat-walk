@@ -87,12 +87,12 @@ window.addEventListener('resize', layout);
 layout();
 app.start();
 
-// ---- splat settings: smooth, pop-free view-dependent colour, everything at full detail ----
+// ---- splat settings: smooth view-dependent colour, with fewer redundant SH refreshes ----
 const gs = app.scene.gsplat;
 if (params.get('sort') === 'cpu') gs.renderer = pc.GSPLAT_RENDERER_RASTER_CPU_SORT;
 gs.alphaClipForward = numeric(params, 'alpha', config.profile === 'performance' ? 0.02 : 1 / 255, 1 / 255, 0.1);
 gs.radialSorting = true;          // turning the head doesn't re-order splats
-gs.colorUpdateAngle = numeric(params, 'cua', 0.6, 0.01, 15);
+gs.colorUpdateAngle = numeric(params, 'cua', 2.0, 0.01, 15); // degrees; limits redundant view-dependent SH refreshes
 gs.splatBudget = 0;               // no LOD budget: the whole passage at its finest level
 gs.lodUnderfillLimit = 0;
 
@@ -130,7 +130,7 @@ app.scene.layers.push(filmLayer);
 const filmCam = new pc.Entity('film');
 filmCam.addComponent('camera', { priority: 1, layers: [filmLayer.id], clearColorBuffer: false, clearDepthBuffer: false });
 app.root.addChild(filmCam);
-const film = new FilmPass(device, sceneTexture);
+const film = new FilmPass(device, sceneTexture, config.taps);
 // The light preset shares one RGB ray instead of sampling each colour separately.
 if (config.profile === 'performance' && params.get('film') !== 'full') film.lens[1] = 0;
 film.init(null);
@@ -341,7 +341,6 @@ function renderFrame() {
     film.tan[0] = tanHalfDisplay * aspect; film.tan[1] = tanHalfDisplay;
     film.tan[2] = tanHalfDisplay * OVERSCAN * aspect; film.tan[3] = tanHalfDisplay * OVERSCAN;
     film.timing[2] = frame % 100000;
-    film.timing[3] = knobs.taps;
     film.look[1] = Math.min(1, 1080 / device.height);
     resizeTarget();
     app.renderNextFrame = true;
