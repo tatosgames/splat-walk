@@ -24,3 +24,8 @@ export function outputRatio(w, h, dpr, config) {
 export function viewTanHalf(fov, aspect) {
     return Math.tan(fov * Math.PI / 360) * Math.min(1, (16 / 9) / aspect);
 }
+export function nextRenderDeadline(previous, now, fps) {
+    if (now + 1 < previous) return previous;
+    const period = 1000 / fps;
+    return now + period - Math.max(0, now - previous) % period;
+}

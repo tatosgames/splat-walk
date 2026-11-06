@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { settings, outputRatio, viewTanHalf } from '../../src/settings.js';
+import { settings, outputRatio, viewTanHalf, nextRenderDeadline } from '../../src/settings.js';
 test('invalid URL values cannot divide by zero or select an inherited profile', () => {
     const s = settings(new URLSearchParams('profile=__proto__&fps=NaN&taps=0&shutter=0&readout=-1&maxh=Infinity'));
     assert.equal(s.profile, 'performance'); assert.equal(s.fps, 50); assert.equal(s.taps, 1);
@@ -18,4 +18,14 @@ test('portrait and landscape respect the same pixel and long-edge budgets', () =
         assert(w * h * r * r <= s.maxPixels + 1);
         assert(Math.max(w, h) * r <= s.maxLong + 1);
     }
+});
+test('paused animation deadlines retain 50 fps between display callbacks instead of halving cadence', () => {
+    for (const refresh of [56,60,120]) {
+        let deadline=0, frames=0;
+        for (let now=0; now<5000; now+=1000/refresh) {
+            if (now+1>=deadline) { frames++; deadline=nextRenderDeadline(deadline,now,50); }
+        }
+        assert(Math.abs(frames-250)<=2, `${refresh} Hz produced ${frames} frames`);
+    }
+    assert.equal(nextRenderDeadline(120,110,50),120, 'An early forced frame must not accumulate future deadlines');
 });

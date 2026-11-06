@@ -310,10 +310,15 @@ try {
             assert(await s.page.evaluate(() => !window.__aw.burn.active), 'Multitouch triggered burn');
             await s.page.mouse.click(195, 400); await s.page.waitForTimeout(100);
             assert(await s.page.evaluate(() => window.__aw.burn.active), 'Tap did not ignite');
+            const burnBefore = await s.page.evaluate(() => ({frames:window.__splatBenchmark.counters.renders,at:performance.now()}));
+            await s.page.waitForTimeout(1200);
+            const burnAfter = await s.page.evaluate(() => ({frames:window.__splatBenchmark.counters.renders,at:performance.now()}));
+            const pausedBurnFps = (burnAfter.frames-burnBefore.frames)*1000/(burnAfter.at-burnBefore.at);
+            assert(pausedBurnFps > 37.5, 'Paused burn fell to half cadence at the 50 fps target');
             await s.page.screenshot({ path: path.join(output, 'interaction-portrait.png') });
             await s.page.setViewportSize(landscape); await s.page.waitForTimeout(500);
             await s.page.screenshot({ path: path.join(output, 'interaction-landscape.png') });
-            manifest.cases.push({ name: 'interaction', valid: true, drag, idle1, idle2 });
+            manifest.cases.push({ name: 'interaction', valid: true, drag, idle1, idle2, pausedBurnFps });
         } finally { await s.context.close(); await save(); }
     }
     console.log(`RESULTS ${output}`);

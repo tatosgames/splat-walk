@@ -4,7 +4,7 @@ import { Walk, plyToWorld, wallsAt } from './walk.js';
 import { ROUTE } from './route.js';
 import { Soundtrack } from './audio.js';
 import { BurnFx } from './burn.js';
-import { settings, numeric, outputRatio, viewTanHalf } from './settings.js';
+import { settings, numeric, outputRatio, viewTanHalf, nextRenderDeadline } from './settings.js';
 import { CameraLook } from './camera-look.js';
 
 const params = new URLSearchParams(location.search);
@@ -242,7 +242,7 @@ let tPlay = numeric(params, 't', 0, 0, walk.duration);   // shot time of the fra
 let clock = tPlay;                           // running clock while playing
 let lastIndex = -1;
 let frame = 0;
-let lastFrameAt = -Infinity;
+let nextInteractionAt = 0;
 let dtAvg = 1 / 60;
 let rate = numeric(params, 'rate', 1, 0.1, 4);
 const knobs = { taps: config.taps };
@@ -308,7 +308,7 @@ const look = new CameraLook(canvas, ignite, () => {
 }, showControls, () => !['loading', 'bench'].includes(state));
 
 function renderFrame() {
-    lastFrameAt = performance.now();
+    nextInteractionAt = nextRenderDeadline(nextInteractionAt, performance.now(), FPS);
     film.glow[3] = tanHalfDisplay / originalTan * 0.5625;
     frame++;
     film.tan[0] = tanHalfDisplay * aspect; film.tan[1] = tanHalfDisplay;
@@ -323,7 +323,7 @@ function renderFrame() {
 app.on('update', (dt) => {
     if (probe?.frozen) return;
     const looking = look.update(dt);
-    const interactionDue = performance.now() - lastFrameAt >= 1000 / FPS - 1;
+    const interactionDue = performance.now() + 1 >= nextInteractionAt;
     if (looking && interactionDue && !['loading', 'bench', 'playing'].includes(state)) app.renderNextFrame = true;
     dtAvg += (dt - dtAvg) * 0.05;
     // resize events can arrive before the new size is visible: compare every frame
