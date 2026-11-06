@@ -36,9 +36,9 @@ sound; F requests fullscreen where supported. Playback suspends while the page i
 and continues automatically when it becomes visible. No FPS/device-limit badge appears.
 The initial Play gesture is retained to enable browser audio.
 
-Touch controls remain visible. Portrait uses the actual viewport and preserves the vertical
-field of view; wide touch landscape preserves the horizontal composition. Desktop retains
-16:9 presentation. Rotation changes orientation only, never the walk's position.
+Touch controls remain visible. Every viewport is filled without letterboxing: portrait and
+narrow windows preserve the vertical field of view, while wide landscape and ultrawide screens
+preserve the horizontal composition. Rotation changes orientation only, never the walk's position.
 Yaw is limited to ±60 degrees and pitch to ±30 degrees.
 
 ## Quality and download size

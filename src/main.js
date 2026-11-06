@@ -71,9 +71,8 @@ let viewCamera;
 function layout() {
     const ww = window.innerWidth, wh = window.innerHeight;
     laidOut = `${ww}x${wh}x${window.devicePixelRatio}`;
-    const immersive = wh > ww || matchMedia('(pointer: coarse)').matches;
-    let w = ww, h = immersive ? wh : Math.round(ww * 9 / 16);
-    if (!immersive && h > wh) { h = wh; w = Math.round(wh * 16 / 9); }
+    // Fill the viewport on every device; the camera FOV handles the aspect crop.
+    const w = ww, h = wh;
     aspect = w / h;
     tanHalfDisplay = viewTanHalf(DISPLAY_VFOV, aspect);
     if (viewCamera) viewCamera.camera.fov = 2 * Math.atan(tanHalfDisplay * OVERSCAN) * 180 / Math.PI;
