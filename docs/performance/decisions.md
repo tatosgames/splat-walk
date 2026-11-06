@@ -1,74 +1,74 @@
-# Decisioni e limiti della versione mobile
+# Mobile version decisions and limitations
 
-## Dati e qualita
+## Data and quality
 
-Il dataset originale resta disponibile: 4.999.591 Gaussiane, tre bande SH, cinque chunk,
-79.577.556 byte. Non sono cinque livelli LOD. La variante predefinita contiene 250.000
-Gaussiane, zero bande SH e occupa 3.124.504 byte: riduzione del 96,1% dei byte della scena.
-Balanced contiene un milione di Gaussiane, una banda SH e occupa 14.490.298 byte.
+The original dataset remains available: 4,999,591 Gaussians, three SH bands, five chunks,
+79,577,556 bytes. These are not five LOD levels. The default variant contains 250,000
+Gaussians, zero SH bands, and takes up 3,124,504 bytes: a 96.1% reduction in scene bytes.
+Balanced contains one million Gaussians, one SH band, and takes up 14,490,298 bytes.
 
-Il PLY originale non era nel repository. La conversione parte dal SOG gia compresso;
-nessuna ricostruzione recupera la precisione persa. Il download SuperSplat richiedeva
-un account separato. Le ricette complete, inclusi intermedi e hash, sono in
-[scene-recipes.json](scene-recipes.json). Il manifest pubblico contiene solo le varianti
-selezionate, mentre candidati e PLY di lavoro restano fuori dal bundle.
+The original PLY was not in the repository. Conversion starts from the already compressed SOG;
+no reconstruction recovers the lost precision. Downloading from SuperSplat required
+a separate account. The complete recipes, including intermediates and hashes, are in
+[scene-recipes.json](scene-recipes.json). The public manifest contains only the selected
+variants, while candidates and working PLY files remain outside the bundle.
 
-Sono stati generati anche 500K SH0 (6.155.509 byte), 500K SH1 (7.571.208 byte) e 2M SH1
-(28.258.740 byte). La coppia 500K permette di isolare la perdita dovuta alle armoniche
-sulla stessa geometria. Il confronto degli archivi conferma byte identici per posizioni, rotazioni, scale e SH0; nel manifest cambia solo shN e si aggiungono le due texture SH1. I dati sono in [harmonic-comparison-data.json](harmonic-comparison-data.json). La generazione di un candidato non ne certifica la qualita.
-Non sono stati rimossi volumi lontani in base alle sole statistiche: potrebbero entrare
-nelle viste laterali della camera.
+500K SH0 (6,155,509 bytes), 500K SH1 (7,571,208 bytes), and 2M SH1
+(28,258,740 bytes) variants were also generated. The 500K pair isolates the loss caused by harmonics
+on the same geometry. Comparing the archives confirms identical bytes for positions, rotations, scales, and SH0; only shN changes in the manifest, and the two SH1 textures are added. The data are in [harmonic-comparison-data.json](harmonic-comparison-data.json). Generating a candidate does not certify its quality.
+Distant volumes were not removed based on statistics alone: they might appear
+in sideways camera views.
 
 ## Rendering
 
-Performance limita separatamente uscita (896 px lato lungo, 451.584 pixel, DPR 1,5) e
-render target della scena (scala dinamica 0,5-1). Quattro campioni temporali condividono
-la lettura RGB: il profilo leggero rinuncia all'aberrazione cromatica laterale, conservando
-esposizione, rolling shutter, aloni, sharpening, vignettatura e grana. Il cutoff forward
-0,02 evita le code quasi trasparenti. Balanced e Original mantengono i tre raggi colore.
-Gli shader GLSL e WGSL implementano gli stessi cambiamenti.
+Performance separately limits output (896 px on the long side, 451,584 pixels, DPR 1.5) and
+the scene render target (dynamic scale 0.5–1). Four temporal samples share
+the RGB read: the lightweight profile drops lateral chromatic aberration while retaining
+exposure, rolling shutter, halos, sharpening, vignetting, and grain. The forward cutoff of
+0.02 avoids nearly transparent tails. Balanced and Original retain the three color rays.
+The GLSL and WGSL shaders implement the same changes.
 
-Il sorting predefinito resta quello del motore: GPU su WebGPU, CPU su WebGL. Sul PC Intel
-lo smoke WebGPU con CPU sorting ha prodotto circa 45 fps contro circa 52 con GPU sorting
-alla precedente uscita 1024 px. Non e stato promosso a ottimizzazione. Ridurre l'uscita
-a 768 px ha prodotto circa 56 fps, quasi come i 55-56 a 896 px, perdendo dettaglio:
-896 px e il compromesso mantenuto. Questi smoke di sei secondi orientano la scelta,
-non dimostrano 60 fps stabili.
+Default sorting remains the engine's own: GPU on WebGPU, CPU on WebGL. On the Intel PC,
+the WebGPU smoke test with CPU sorting produced about 45 fps versus about 52 with GPU sorting
+at the previous 1024 px output size. It was not adopted as an optimization. Reducing output
+to 768 px produced about 56 fps, close to the 55–56 at 896 px, while losing detail:
+896 px is the retained compromise. These six-second smoke tests guide the choice;
+they do not demonstrate stable 60 fps.
 
-Il benchmark iniziale del profilo leggero usa 32 frame invece di 60 e inizia da scala 0,7.
-Il SOG unico richiede tre frame di disponibilita stabile invece dei venti dello streaming
-originale. Il dettaglio minimo e gia la scena completa del profilo: nessun upgrade nascosto
-scarica il dataset originale. I suoni si caricano dopo il gesto e non bloccano Play.
+The lightweight profile's initial benchmark uses 32 frames instead of 60 and starts at scale 0.7.
+The single SOG requires three frames of stable readiness instead of the twenty used by the original
+streaming setup. The minimum detail level is already the profile's complete scene: no hidden upgrade
+downloads the original dataset. Sounds load after the gesture and do not block Play.
 
-## Verifiche visive e funzionali
+## Visual and functional checks
 
-La verifica su Chrome ha coperto 320x568, 390x844, 412x915, 844x390, 768x1024 e 1280x720,
-con schermata iniziale e pausa. Portrait renderizza al rapporto effettivo. Controlli
-alti almeno 44 px e rientranti nel viewport; a 320 px la qualita occupa una seconda riga.
-Sono state ispezionate le viste yaw -60/+60 e pitch -30/+30 a t=16. Pareti vicine e
-insegne perdono dettaglio nel preset leggero: e una riduzione visibile, non equivalenza
-alla scena originale. Nessun nuovo vuoto evidente nelle quattro viste esaminate;
-questa osservazione non copre ogni combinazione di tempo e angolo.
+Chrome checks covered 320x568, 390x844, 412x915, 844x390, 768x1024, and 1280x720,
+including the start and pause screens. Portrait renders at the actual aspect ratio. Controls
+are at least 44 px tall and fit within the viewport; at 320 px, quality occupies a second row.
+Views at yaw -60/+60 and pitch -30/+30 were inspected at t=16. Nearby walls and
+signs lose detail in the lightweight preset: this is a visible reduction, not equivalence
+to the original scene. No obvious new gaps appeared in the four inspected views;
+this observation does not cover every combination of time and angle.
 
-Mouse e touch CDP hanno verificato drag in pausa, ricentra, multitouch senza burn,
-tap con burn e cambio viewport. Altri controlli hanno verificato audio reale del browser,
-pausa/ripresa, fine e replay, errore scena e retry. Il test di visibilitychange e sintetico:
-l'automazione manteneva visibili entrambe le finestre. Background reale, notch, barre
-dinamiche e gesture fisiche su Android/iPhone rimangono nella
-[procedura device](mobile-validation.md).
+Mouse and CDP touch tests checked dragging while paused, recentering, multitouch without a burn,
+tapping with a burn, and viewport changes. Other checks verified actual browser audio,
+pause/resume, ending and replay, scene errors, and retry. The visibilitychange test is synthetic:
+automation kept both windows visible. Actual background behavior, notches, dynamic browser bars,
+and physical gestures on Android/iPhone remain part of the
+[device procedure](mobile-validation.md).
 
-Le acquisizioni duplicate originali non sono byte identiche nonostante posa, rumore e
-tempo effetto bloccati. A t=16 differiscono 34.828 pixel su 921.600, principalmente di
-un livello; il massimo osservato e 24. Il gate byte non e superato. Per le modifiche
-lossy si usa quindi un confronto affiancato; non viene inventata una soglia di qualita.
+The original duplicate captures are not byte-identical despite the pose, noise, and
+effect time being frozen. At t=16, 34,828 out of 921,600 pixels differ, mostly by
+one level; the observed maximum is 24. The byte-identity gate has not passed. Lossy changes
+therefore use side-by-side comparisons; no quality threshold is invented.
 
-## Criteri di rilascio
+## Release criteria
 
-Il 6 novembre il target e stato aggiornato a 50 fps su richiesta dell'utente. I 60 fps restano un obiettivo successivo. Il budget corrente e GPU/CPU p95 entro 17 ms, tick persi sotto l'1% e intervallo p99
-entro 40 ms. Un run valido significa che la misura e completa e visibile, non che
-questi budget siano superati. Auto dichiara 30 fps dopo sovraccarico persistente;
-il fallback mantiene l'esperienza utilizzabile ma non soddisfa il target 50.
-La matrice con fps esplicito mantiene il target richiesto per rendere visibili i fallimenti.
+On November 6, the target was updated to 50 fps at the user's request. 60 fps remains a future goal. The current budget is GPU/CPU p95 within 17 ms, missed ticks below 1%, and p99 interval
+within 40 ms. A valid run means the measurement is complete and visible, not that
+these budgets have been met. Auto reports 30 fps after sustained overload;
+the fallback keeps the experience usable but does not meet the 50 fps target.
+The matrix with explicit FPS keeps the requested target to make failures visible.
 
-I risultati PC non certificano una GPU mobile. Non sono stati forniti telefoni di
-riferimento, quindi non si dichiara completata la validazione Android/iPhone.
+PC results do not certify a mobile GPU. No reference phones have been
+provided, so Android/iPhone validation is not claimed to be complete.

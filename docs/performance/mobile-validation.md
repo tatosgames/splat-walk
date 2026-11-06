@@ -1,25 +1,25 @@
-# Verifica sui telefoni reali
+# Validation on physical phones
 
-Stato: in attesa di misure sui dispositivi. La disponibilità della pagina benchmark non equivale a un test mobile completato.
+Status: awaiting device measurements. The availability of the benchmark page does not mean mobile testing is complete.
 
-Aprire [la pagina di benchmark](https://tatosgames.github.io/splat-walk/benchmark.html) dopo il deploy. Prima di ogni esecuzione indicare modello, browser, versione del sistema e condizioni di alimentazione/rete. Non includere dati personali nelle note.
+Open [the benchmark page](https://tatosgames.github.io/splat-walk/benchmark.html) after deployment. Before each run, enter the model, browser, system version, and power/network conditions. Do not include personal data in the notes.
 
-| Dispositivo | Modello e OS | Browser | Portrait tre giri | Landscape tre giri | Burn e ripristino | Cinque minuti | JSON |
+| Device | Model and OS | Browser | Portrait: three runs | Landscape: three runs | Burn and restore | Five minutes | JSON |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Android | Da indicare | Chrome | Da fare | Da fare | Da fare | Da fare | Da raccogliere |
-| iPhone | Da indicare | Safari | Da fare | Da fare | Da fare | Da fare | Da raccogliere |
+| Android | To be specified | Chrome | To do | To do | To do | To do | To be collected |
+| iPhone | To be specified | Safari | To do | To do | To do | To do | To be collected |
 
-## Procedura
+## Procedure
 
-1. Impostare lo schermo a 60 Hz se il dispositivo lo permette, disattivare il risparmio energetico e annotare le condizioni. Non eseguire il test durante altri carichi pesanti.
-2. Selezionare 50 fps e backend automatico nella pagina benchmark. Applicare e ricaricare; scegliere Passeggiata per tre ripetizioni. Mantenere la pagina visibile.
-3. Esportare il JSON, ruotare il telefono e ripetere. Registrare il backend realmente usato: WebGPU può non essere disponibile.
-4. Eseguire lo scenario Burn e ripristino, poi la sessione di cinque minuti. Annotare surriscaldamento, crash e peggioramento visibile.
-5. Nella demo principale verificare drag e tap separatamente, due dita, annullamento del gesto, ritorno automatico al centro dopo tre secondi e rotazione del telefono. Controllare notch, barre del browser, pulsanti e crediti.
-6. Per cache fredda usare gli strumenti del browser quando disponibili; non chiamare una misura cold soltanto perché si è ricaricata la pagina. Le limitazioni vanno annotate.
+1. Set the screen to 60 Hz if the device allows it, disable power saving, and record the conditions. Do not test while other heavy workloads are running.
+2. Select 50 fps and the automatic backend on the benchmark page. Apply and reload; choose Walk for three repetitions. Keep the page visible.
+3. Export the JSON, rotate the phone, and repeat. Record the backend actually used: WebGPU may not be available.
+4. Run the Burn and restore scenario, then the five-minute session. Note overheating, crashes, and visible degradation.
+5. In the main demo, check dragging and tapping separately, two-finger input, gesture cancellation, automatic recentering after three seconds, and phone rotation. Check notches, browser bars, buttons, and credits.
+6. For cold-cache tests, use browser tools when available; do not call a measurement cold simply because the page was reloaded. Record any limitations.
 
-## Criteri
+## Criteria
 
-Il target corrente di 50 fps richiede misure coerenti per l'intera passeggiata e l'interazione, non una media favorevole di pochi secondi. Confrontare p95/p99, tick persi, dimensioni effettive e backend. GPU timing mancante resta non disponibile; una viewport mobile emulata sul PC non sostituisce questa tabella.
+The current 50 fps target requires consistent measurements throughout the entire walk and interaction, not a favorable average over a few seconds. Compare p95/p99, missed ticks, actual dimensions, and backend. Missing GPU timing remains unavailable; an emulated mobile viewport on a PC does not replace this table.
 
-Se il benchmark registra il fallback Auto a 30 fps, la demo resta utilizzabile ma il requisito 50 fps su quel telefono non è superato. Eventuali artefatti introdotti dalla riduzione delle Gaussiane vanno descritti per posa e angolo di visuale, oltre alla velocità.
+If the benchmark records Auto falling back to 30 fps, the demo remains usable but the 50 fps requirement is not met on that phone. Any artifacts introduced by reducing the Gaussians must be described by pose and viewing angle, alongside speed.
