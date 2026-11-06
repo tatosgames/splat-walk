@@ -148,7 +148,72 @@ function resizeTarget() {
 const walk = new Walk(ROUTE);
 console.log(`walk: ${walk.path.length.toFixed(1)} m, ${walk.duration.toFixed(1)} s`);
 const playbackDuration = walk.loopDuration;
-const samplePose = (t, position, rotation, gazeWeight) => walk.samplePlayback(t, position, rotation, gazeWeight);
+let poseCache = null;
+const cacheRotA = new pc.Quat(), cacheRotB = new pc.Quat(), cachePoseRot = new pc.Quat(), cacheYaw = new pc.Quat();
+const cacheUp = new pc.Vec3(0, 1, 0);
+function buildPoseCache() {
+    const started = performance.now();
+    const { T, dt } = walk.tables;
+    const cacheDt = dt * 2; // 120 Hz balances interpolation accuracy and cache build cost.
+    const count = Math.ceil((T.length - 1) / 2) + 1;
+    const positions = new Float64Array(count * 3);
+    const rotations = new Float64Array(count * 4);
+    const position = new pc.Vec3(), rotation = new pc.Quat();
+
+    return new Promise((resolve) => {
+        let i = 0;
+        const buildChunk = () => {
+            const end = Math.min(count, i + 64);
+            for (; i < end; i++) {
+                walk.sample(Math.min(i * cacheDt, T[T.length - 1]), position, rotation, 1, 0);
+                const p = i * 3, q = i * 4;
+                positions[p] = position.x; positions[p + 1] = position.y; positions[p + 2] = position.z;
+                rotations[q] = rotation.x; rotations[q + 1] = rotation.y;
+                rotations[q + 2] = rotation.z; rotations[q + 3] = rotation.w;
+            }
+            if (i < count) {
+                setTimeout(buildChunk, 0);
+            } else {
+                resolve({ positions, rotations, dt: cacheDt, count, buildMs: performance.now() - started });
+            }
+        };
+        setTimeout(buildChunk, 0);
+    });
+}
+const poseCacheReady = buildPoseCache().then((cache) => {
+    poseCache = cache;
+    return cache;
+}).catch((error) => {
+    console.warn('pose cache unavailable; using direct walk sampling:', error);
+    return null;
+});
+
+function samplePose(t, position, rotation, gazeWeight) {
+    // The pose cache stores the fully simulated gaze. Touch/recenter temporarily changes gazeWeight,
+    // so preserve the live sampler during those interactions and use the cache once it settles.
+    if (!poseCache || gazeWeight < 0.999999) return walk.samplePlayback(t, position, rotation, gazeWeight);
+
+    const playback = walk.playbackPose(t);
+    const routeTime = playback.time;
+    const f = Math.max(0, Math.min(poseCache.count - 1, routeTime / poseCache.dt));
+    const i = Math.min(poseCache.count - 2, Math.floor(f));
+    const u = f - i;
+    const a = i * 3, b = (i + 1) * 3;
+    position.set(
+        poseCache.positions[a] + (poseCache.positions[b] - poseCache.positions[a]) * u,
+        poseCache.positions[a + 1] + (poseCache.positions[b + 1] - poseCache.positions[a + 1]) * u,
+        poseCache.positions[a + 2] + (poseCache.positions[b + 2] - poseCache.positions[a + 2]) * u
+    );
+    const qa = i * 4, qb = (i + 1) * 4;
+    cacheRotA.set(poseCache.rotations[qa], poseCache.rotations[qa + 1], poseCache.rotations[qa + 2], poseCache.rotations[qa + 3]);
+    cacheRotB.set(poseCache.rotations[qb], poseCache.rotations[qb + 1], poseCache.rotations[qb + 2], poseCache.rotations[qb + 3]);
+    cachePoseRot.slerp(cacheRotA, cacheRotB, u);
+    if (playback.facingOffset) {
+        cacheYaw.setFromAxisAngle(cacheUp, playback.facingOffset);
+        rotation.mul2(cacheYaw, cachePoseRot);
+    } else rotation.copy(cachePoseRot);
+    return rotation;
+}
 
 const pos = new pc.Vec3(), rot = new pc.Quat();
 const W = new pc.Mat4(), Wt = new pc.Mat4(), Winv = new pc.Mat4(), M = new pc.Mat4();
@@ -658,6 +723,7 @@ window.__aw = {
     get state() { return state; },
     get fps() { return FPS; },
     get renderScale() { return renderScale; },
+    get poseCacheBuildMs() { return poseCache?.buildMs ?? null; },
     set renderScale(v) { renderScale = v; app.renderNextFrame = true; },
     get measuredFps() { return scaler.lastFps; },
     seek(t) {
